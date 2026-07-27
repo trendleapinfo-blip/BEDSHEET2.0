@@ -29,9 +29,46 @@ const outfit = Outfit({
 });
 
 export const metadata = {
-  title: "ClosetRush | Premium Bedding & Linen Rental Service",
+  metadataBase: new URL('https://www.closetrush.in'),
+  title: {
+    default: "ClosetRush | Premium Bedding & Linen Rental Service",
+    template: "%s | ClosetRush"
+  },
   description: "Rent clean bed sheets at just ₹10 per day. Clean, fresh organic bedsheets and pillow covers delivered to your doorstep. Free delivery, pause or cancel anytime.",
-  keywords: ["clean bedding", "bedsheet rental", "hygienic bedsheets", "prevent bedsheet acne", "dust mite allergy bedding", "sleep hygiene", "hostel bedding"],
+  keywords: ["clean bedding", "bedsheet rental", "hygienic bedsheets", "prevent bedsheet acne", "dust mite allergy bedding", "sleep hygiene", "hostel bedding", "closetrush", "rent bedsheets", "rent bedsheets bangalore", "bedding rental"],
+  openGraph: {
+    title: "ClosetRush | Premium Bedding & Linen Rental Service",
+    description: "Rent clean bed sheets at just ₹10 per day. Free delivery, pause or cancel anytime.",
+    url: "https://www.closetrush.in",
+    siteName: "ClosetRush",
+    images: [
+      {
+        url: "/logo.png",
+        width: 800,
+        height: 600,
+        alt: "ClosetRush Premium Bedding"
+      }
+    ],
+    locale: "en_IN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ClosetRush | Premium Bedding & Linen Rental Service",
+    description: "Rent clean bed sheets at just ₹10 per day. Free delivery, pause or cancel anytime.",
+    images: ["/logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   icons: {
     icon: '/logo.png',
     apple: '/logo.png',
