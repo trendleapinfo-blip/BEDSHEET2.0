@@ -7,10 +7,16 @@ import crypto from "crypto";
 export async function POST(req) {
   try {
     await dbConnect();
-    const { path, referrer, userAgent, isPwaInstall } = await req.json();
+    let body = {};
+    try {
+      body = await req.json();
+    } catch (e) {
+      // Body might be empty
+    }
+    const { path, referrer, userAgent, isPwaInstall } = body;
 
     // Assign a temporary session ID using cookies
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     let sessionId = cookieStore.get("analytics_session")?.value;
     if (!sessionId) {
       sessionId = crypto.randomBytes(16).toString("hex");
