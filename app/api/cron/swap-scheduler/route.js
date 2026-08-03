@@ -1,22 +1,29 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
+import mongoose from "mongoose";
 import Order from "@/models/Order";
 import Bundle from "@/models/Bundle";
 import Refund from "@/models/Refund";
+import User from "@/models/User";
 
 // ─── Automated Sheet Swap Scheduler ─────────────────────────
 // This endpoint should be called on a schedule (e.g., daily cron via Vercel Cron, external ping, or admin trigger).
 // It checks all active RENT orders with WEEKLY_SWAP or MONTHLY_SWAP frequency,
 // determines if a swap cycle is due, and auto-creates a fresh bundle for dispatch.
 
-// Optional: Protect with a secret key for cron calls
+// Protect with CRON_SECRET environment variable
 function verifyCronSecret(request) {
   const url = new URL(request.url);
-  const secret = url.searchParams.get("secret");
-  const cronSecret = process.env.CRON_SECRET || "closetrush_swap_2026";
-  // Allow without secret in dev, require in production
-  if (process.env.NODE_ENV === "production" && secret !== cronSecret) {
-    return false;
+  const secretParam = url.searchParams.get("secret");
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (process.env.NODE_ENV === "production") {
+    if (!cronSecret) return false;
+    return secretParam === cronSecret || authHeader === `Bearer ${cronSecret}`;
+  }
+  if (cronSecret) {
+    return secretParam === cronSecret || authHeader === `Bearer ${cronSecret}`;
   }
   return true;
 }
@@ -80,11 +87,15 @@ export async function GET(request) {
         // Auto-create PENDING Deposit Refund claim if deposit was charged
         if (order.depositCharged && order.depositCharged > 0) {
           const existingRefund = await Refund.findOne({
-            $or: [{ userId: order.userId }, { userEmail: order.email }],
-            planName: order.bundleName,
+            $or: [
+              { orderId: order._id.toString() },
+              { orderId: order.bundleOrderId },
+              { $and: [{ $or: [{ userId: order.userId }, { userEmail: order.email }] }, { planName: order.bundleName }, { orderId: { $exists: false } }] }
+            ]
           });
           if (!existingRefund) {
             await Refund.create({
+              orderId: order._id.toString(),
               userId: order.userId || "GUEST",
               userName: order.userName || "Customer",
               userEmail: order.email,
@@ -95,6 +106,19 @@ export async function GET(request) {
             });
           }
         }
+        results.skipped++;
+        continue;
+      }
+
+      // Check if user subscription is currently paused (BUG-019)
+      const userDoc = await User.findOne({
+        $or: [
+          { _id: mongoose.isValidObjectId(order.userId) ? order.userId : null },
+          { email: order.email }
+        ].filter(Boolean)
+      });
+
+      if (userDoc?.selectedPlan?.isPaused && userDoc.selectedPlan?.pausedUntil && new Date() < new Date(userDoc.selectedPlan.pausedUntil)) {
         results.skipped++;
         continue;
       }

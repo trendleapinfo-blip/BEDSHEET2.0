@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Order from "@/models/Order";
@@ -16,7 +16,7 @@ export async function GET() {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      decoded = verifyToken(token);
     } catch (err) {
       return NextResponse.json({ authenticated: false, error: "Invalid token" }, { status: 401 });
     }

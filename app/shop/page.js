@@ -256,7 +256,6 @@ export default function ShopPage() {
   const [mobile, setMobile] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-  const [devOtp, setDevOtp] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
@@ -393,9 +392,6 @@ export default function ShopPage() {
       if (res.ok) {
         setOtpSent(true);
         setAuthSuccess("Verification code sent successfully.");
-        if (data.code) {
-          setDevOtp(data.code);
-        }
       } else {
         setAuthError(data.error || "Failed to send code.");
       }
@@ -465,9 +461,6 @@ export default function ShopPage() {
           if (data.verificationRequired) {
             setOtpSent(true);
             setAuthSuccess("Verification code sent! Enter code to complete signup.");
-            if (data.code) {
-              setDevOtp(data.code);
-            }
           } else {
             setAuthSuccess("Registered successfully!");
             setUser(data.user);
@@ -566,17 +559,6 @@ export default function ShopPage() {
     setCheckoutLoading(true);
 
     try {
-      const orderRes = await fetch("/api/payment/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totalPrice: b2cPricing.total })
-      });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) {
-        throw new Error(orderData.error || "Failed to initialize payment gateway.");
-      }
-
-      const sizeLabel = selectedBedType.charAt(0).toUpperCase() + selectedBedType.slice(1);
       const activePaymentStyles = settings?.paymentStyles && settings.paymentStyles.length > 0
         ? settings.paymentStyles
         : [
@@ -585,6 +567,33 @@ export default function ShopPage() {
         ];
       const activeStyle = activePaymentStyles.find(s => s.id === planType) || activePaymentStyles[0];
       const itemTier = (activeStyle && activeStyle.depositMultiplier === 0) ? "PREMIUM" : "BASIC";
+      const sizeLabel = selectedBedType.charAt(0).toUpperCase() + selectedBedType.slice(1);
+
+      const orderRes = await fetch("/api/payment/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          totalPrice: b2cPricing.total,
+          orderDetails: {
+            bedType: selectedBedType,
+            planName: `${sizeLabel} Bed sheets (${selectedDuration} swap cycle)`,
+            price: b2cPricing.subtotal,
+            duration: selectedDuration,
+            subscriptionType: "monthly",
+            securityDeposit: b2cPricing.deposit,
+            gst: b2cPricing.gst,
+            totalPrice: b2cPricing.total,
+            couponCode: appliedCoupon ? appliedCoupon.couponCode : null,
+            discount: b2cPricing.couponDiscount,
+            orderType: "RENT",
+            itemTier
+          }
+        })
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        throw new Error(orderData.error || "Failed to initialize payment gateway.");
+      }
 
       const options = {
         key: orderData.keyId,
@@ -1308,17 +1317,7 @@ export default function ShopPage() {
               </div>
             )}
 
-            {devOtp && (
-              <div className="p-3.5 bg-[#05D4B5]/10 border border-[#05D4B5]/20 text-[#032026] text-3xs font-black rounded-2xl flex items-center justify-between">
-                <span>[Dev Mode] Verification Code: <strong className="text-[#032026] text-[11px]">{devOtp}</strong></span>
-                <button
-                  onClick={() => setOtpCode(devOtp)}
-                  className="px-3 py-1 bg-[#05D4B5] text-[#032026] text-[9px] uppercase tracking-wider font-extrabold rounded-full cursor-pointer hover:scale-105 transition-transform"
-                >
-                  Autofill
-                </button>
-              </div>
-            )}
+
 
             <form onSubmit={handleAuthSubmit} className="space-y-4">
               {authMode === "signup" && (

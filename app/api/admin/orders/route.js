@@ -3,6 +3,7 @@ import dbConnect from "@/lib/db";
 import Order from "@/models/Order";
 import Bundle from "@/models/Bundle";
 import Category from "@/models/Category";
+import Refund from "@/models/Refund";
 import { verifyAdmin } from "@/lib/adminAuth";
 
 export async function GET() {
@@ -150,7 +151,24 @@ export async function DELETE(request) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, message: "Order deleted successfully" });
+    // Cascading deletions for linked Bundle and Refund claims
+    await Bundle.deleteMany({
+      $or: [
+        { orderId: deleted._id.toString() },
+        { orderId: deleted.bundleOrderId },
+        { parentOrderId: deleted._id.toString() },
+        { parentOrderId: deleted.bundleOrderId }
+      ]
+    });
+
+    await Refund.deleteMany({
+      $or: [
+        { orderId: deleted._id.toString() },
+        { orderId: deleted.bundleOrderId }
+      ]
+    });
+
+    return NextResponse.json({ success: true, message: "Order and linked bundle/refund records deleted successfully" });
   } catch (error) {
     console.error("Delete Order Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -31,7 +31,8 @@ import {
   ChevronRight,
   TrendingUp,
   Package,
-  Truck
+  Truck,
+  AlertTriangle
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -292,6 +293,36 @@ export default function Dashboard() {
       setProfileError("Network error occurred. Please try again.");
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    setProfileError("");
+    setProfileSuccess("");
+
+    const confirmed = confirm(
+      "Are you sure you want to permanently delete your ClosetRush account? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setDeletingAccount(true);
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Your account has been deleted successfully.");
+        window.location.href = "/";
+      } else {
+        setProfileError(data.error || "Failed to delete account.");
+      }
+    } catch (err) {
+      setProfileError("Network error occurred while attempting to delete account.");
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -1797,6 +1828,32 @@ export default function Dashboard() {
                     {profileSaving ? "Saving details..." : "Save Changes"}
                   </button>
                 </form>
+
+                {/* DANGER ZONE: DELETE ACCOUNT */}
+                <div className="pt-8 border-t border-charcoal-ink/10 max-w-2xl">
+                  <div className="bg-red-50/60 border border-red-200/80 p-6 rounded-none space-y-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-red-900 uppercase tracking-wider flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                        Danger Zone: Delete Account
+                      </h3>
+                      <p className="text-xs text-red-700/80 mt-1 font-medium leading-relaxed">
+                        Permanently remove your account and personal profile data from ClosetRush.
+                        <br />
+                        <span className="font-bold text-red-900">Note:</span> Account deletion is only allowed if you have no active subscription plan or running orders.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccount}
+                      disabled={deletingAccount}
+                      className="py-3 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-xs"
+                    >
+                      {deletingAccount ? "Deleting Account..." : "Delete Account"}
+                    </button>
+                  </div>
+                </div>
 
               </div>
             )}

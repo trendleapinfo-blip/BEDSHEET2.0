@@ -40,8 +40,8 @@ export async function POST(request) {
       selectedPlan,
     } = await request.json();
 
-    if (!name || !email) {
-      return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+    if (!name || !email || !password) {
+      return NextResponse.json({ error: "Name, email, and password are required fields." }, { status: 400 });
     }
 
     const normalizedEmail = email.toLowerCase();
@@ -59,10 +59,9 @@ export async function POST(request) {
       }
     }
 
-    // Hash password (default to 'customerpassword' if none provided)
-    const passToHash = password || "customerpassword";
+    // Hash password
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(passToHash, salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = await User.create({
       name,

@@ -2,6 +2,10 @@ import mongoose from "mongoose";
 
 const RefundSchema = new mongoose.Schema(
   {
+    orderId: {
+      type: String,
+      trim: true,
+    },
     userId: {
       type: String,
       required: true,

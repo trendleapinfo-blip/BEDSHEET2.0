@@ -115,7 +115,6 @@ function ForgotPasswordWizard({ onCancel }) {
   const [otp, setOtp] = useState("");
   const [newPass, setNewPass] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [devOtp, setDevOtp] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -150,7 +149,6 @@ function ForgotPasswordWizard({ onCancel }) {
       if (!res.ok) throw new Error(data.error || "Could not send verification code.");
       setSuccess("Code sent! Check your inbox.");
       setCountdown(60);
-      if (data.code) setDevOtp(data.code);
       setStep("otp");
     } catch (err) {
       setError(err.message);
@@ -261,19 +259,7 @@ function ForgotPasswordWizard({ onCancel }) {
       {error && <ErrorBanner msg={error} />}
       {success && step !== "done" && <SuccessBanner msg={success} />}
 
-      {/* Dev OTP helper */}
-      {devOtp && step === "otp" && (
-        <div className="mb-5 p-3.5 bg-linen-gold/10 border border-linen-gold/20 text-linen-gold text-2xs font-bold flex items-center justify-between">
-          <span className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-linen-gold animate-ping" />
-            [Dev] OTP: <strong className="text-charcoal-ink ml-1">{devOtp}</strong>
-          </span>
-          <button type="button" onClick={() => setOtp(devOtp)}
-            className="text-[10px] bg-linen-gold hover:bg-charcoal-ink text-white px-2.5 py-1 font-extrabold uppercase transition-colors cursor-pointer">
-            Autofill
-          </button>
-        </div>
-      )}
+
 
       {/* ── Step 1: Email ── */}
       {step === "email" && (

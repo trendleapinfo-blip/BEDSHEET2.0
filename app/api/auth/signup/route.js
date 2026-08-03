@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { signToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Otp from "@/models/Otp";
+import { sendOtpEmail } from "@/lib/mailer";
 
 export async function POST(request) {
   try {
@@ -15,6 +16,14 @@ export async function POST(request) {
     if (!name || !email || !password || !mobile) {
       return NextResponse.json(
         { error: "Name, email, password, and mobile number are required fields." },
+        { status: 400 }
+      );
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: "Please enter a valid email address." },
         { status: 400 }
       );
     }
@@ -63,6 +72,14 @@ export async function POST(request) {
         { upsert: true, new: true }
       );
 
+      // Dispatch email to user inbox
+      try {
+        await sendOtpEmail(email.toLowerCase(), code, "signup");
+        console.log(`[OTP SIGNUP SERVICE] Dispatched email to ${email.toLowerCase()}`);
+      } catch (mailErr) {
+        console.error("[OTP SIGNUP SERVICE] Mail dispatch error:", mailErr.message);
+      }
+
       // Print to console for development testing
       console.log("\n========================================");
       console.log(`[OTP SIGNUP SERVICE] Send To: ${email.toLowerCase()}`);
@@ -72,8 +89,7 @@ export async function POST(request) {
       return NextResponse.json(
         {
           verificationRequired: true,
-          message: "Verification code sent to email.",
-          code, // Return code so frontend can display a Dev Mode banner for testing
+          message: "Verification code sent to email."
         },
         { status: 200 }
       );
@@ -111,9 +127,8 @@ export async function POST(request) {
     });
 
     // Generate JWT token
-    const token = jwt.sign(
+    const token = signToken(
       { userId: newUser._id, email: newUser.email },
-      process.env.JWT_SECRET || "fallback_secret",
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 

@@ -79,8 +79,6 @@ export async function POST(request) {
       {
         message: "Verification code sent successfully.",
         emailSent,
-        // Only expose code in non-production so dev banner still works
-        ...(process.env.NODE_ENV !== "production" && { code }),
       },
       { status: 200 }
     );

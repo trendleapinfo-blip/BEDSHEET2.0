@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Order from "@/models/Order";
@@ -19,7 +19,7 @@ export async function GET() {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      decoded = verifyToken(token);
     } catch (err) {
       return NextResponse.json({ error: "Invalid session token." }, { status: 401 });
     }
@@ -75,7 +75,7 @@ export async function PUT(request) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      decoded = verifyToken(token);
     } catch (err) {
       return NextResponse.json({ error: "Invalid session token." }, { status: 401 });
     }
@@ -147,6 +147,68 @@ export async function PUT(request) {
     console.error("Update Profile API Error:", error);
     return NextResponse.json(
       { error: error.message || "Internal Server Error occurred while updating profile." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE() {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    }
+
+    let decoded;
+    try {
+      decoded = verifyToken(token);
+    } catch (err) {
+      return NextResponse.json({ error: "Invalid session token." }, { status: 401 });
+    }
+
+    await dbConnect();
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return NextResponse.json({ error: "User not found." }, { status: 404 });
+    }
+
+    // Check if user has an active selected plan
+    const hasActiveSelectedPlan = !!(
+      user.selectedPlan &&
+      user.selectedPlan.planName &&
+      user.selectedPlan.planName.trim() !== ""
+    );
+
+    // Check if user has active running orders in database
+    const hasActiveOrders = !!(await Order.exists({
+      $or: [{ userId: user._id.toString() }, { email: user.email }],
+      status: { $in: ["ACTIVE", "PENDING", "DELIVERED"] }
+    }));
+
+    if (hasActiveSelectedPlan || hasActiveOrders) {
+      return NextResponse.json(
+        { error: "Cannot delete account while an active subscription plan or running order exists. Please cancel your plan first." },
+        { status: 400 }
+      );
+    }
+
+    // Delete user from database
+    await User.findByIdAndDelete(user._id);
+
+    // Clear session cookie
+    cookieStore.delete("token");
+
+    return NextResponse.json({
+      success: true,
+      message: "Your account has been deleted successfully."
+    });
+  } catch (error) {
+    console.error("Delete Account API Error:", error);
+    return NextResponse.json(
+      { error: error.message || "Internal Server Error occurred while deleting account." },
       { status: 500 }
     );
   }

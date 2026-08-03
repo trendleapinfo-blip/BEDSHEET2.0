@@ -87,7 +87,7 @@ const OrderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["ACTIVE", "CANCELLED", "PENDING", "DELIVERED"],
+      enum: ["ACTIVE", "CANCELLED", "PENDING", "DELIVERED", "EXPIRED"],
       default: "ACTIVE",
     },
     swapCycle: {

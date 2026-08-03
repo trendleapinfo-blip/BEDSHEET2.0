@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "@/lib/jwt";
 import dbConnect from "../../../../lib/db";
 import User from "../../../../models/User";
 
@@ -16,7 +16,7 @@ export async function POST(req) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      decoded = verifyToken(token);
     } catch (err) {
       return NextResponse.json({ success: false, error: "Invalid session" }, { status: 401 });
     }

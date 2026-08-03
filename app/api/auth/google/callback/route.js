@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { signToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 
@@ -88,9 +88,8 @@ export async function GET(request) {
     }
 
     // Generate JWT token
-    const token = jwt.sign(
+    const token = signToken(
       { userId: user._id, email: user.email },
-      process.env.JWT_SECRET || "fallback_secret",
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 

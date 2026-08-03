@@ -1,4 +1,5 @@
-const CACHE_NAME = 'closerush-pwa-cache-v1';
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = `closerush-pwa-cache-${CACHE_VERSION}`;
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [

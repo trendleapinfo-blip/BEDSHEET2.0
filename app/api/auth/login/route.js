@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { signToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 
@@ -22,21 +22,6 @@ export async function POST(request) {
       user = await User.findOne({ email: email.toLowerCase() });
     } else if (mobile) {
       user = await User.findOne({ mobile });
-    }
-
-    // Auto-seed admin user if admin@closetrush.com is used and user doesn't exist yet
-    if (!user && email && email.toLowerCase() === "admin@closetrush.com" && password === "adminpassword") {
-      const hashedPassword = await bcrypt.hash("adminpassword", 10);
-      user = await User.create({
-        name: "ClosetRush Admin",
-        email: "admin@closetrush.com",
-        mobile: "9999999999",
-        password: hashedPassword,
-        address: "ClosetRush HQ, Delhi NCR",
-        accountType: "Individual User",
-        role: "admin",
-        status: "ACTIVE"
-      });
     }
 
     if (!user) {
@@ -64,9 +49,8 @@ export async function POST(request) {
     }
 
     // Generate JWT token
-    const token = jwt.sign(
+    const token = signToken(
       { userId: user._id, email: user.email },
-      process.env.JWT_SECRET || "fallback_secret",
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 

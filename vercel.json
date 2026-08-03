@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/swap-scheduler?secret=closetrush_swap_2026",
+      "path": "/api/cron/swap-scheduler",
       "schedule": "0 6 * * *"
     }
   ]

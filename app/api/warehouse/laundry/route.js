@@ -1,11 +1,32 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
+import User from "@/models/User";
 import Bundle from "@/models/Bundle";
 import LaundryLog from "@/models/LaundryLog";
 
 export async function POST(request) {
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized. Session token missing." }, { status: 401 });
+    }
+
+    let decoded;
+    try {
+      decoded = verifyToken(token);
+    } catch (err) {
+      return NextResponse.json({ error: "Invalid or expired session token." }, { status: 401 });
+    }
+
     await dbConnect();
+    const user = await User.findById(decoded.userId);
+    if (!user || !["warehouse", "admin"].includes(user.role)) {
+      return NextResponse.json({ error: "Forbidden. Warehouse staff or Admin access required." }, { status: 403 });
+    }
+
     const { action, bundleId, items } = await request.json();
     // action: "SEND" or "RECEIVE"
 

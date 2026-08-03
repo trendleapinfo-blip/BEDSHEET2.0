@@ -36,7 +36,6 @@ function SignupFormContent() {
   // OTP States
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [otpCode, setOtpCode] = useState("");
-  const [devOtp, setDevOtp] = useState("");
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -130,9 +129,6 @@ function SignupFormContent() {
       if (data.verificationRequired) {
         setVerificationRequired(true);
         setSuccess("Verification code sent! Please verify your email to complete signup.");
-        if (data.code) {
-          setDevOtp(data.code);
-        }
         setLoading(false);
         return;
       }
@@ -228,22 +224,7 @@ function SignupFormContent() {
         </div>
       )}
 
-      {/* Developer helper banner for OTP code */}
-      {devOtp && (
-        <div className="mb-6 p-4 rounded-none bg-linen-gold/10 border border-linen-gold/20 text-linen-gold text-2xs font-bold flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-linen-gold animate-ping"></span>
-            <span>[Dev Helper] Sent OTP: <strong className="text-charcoal-ink">{devOtp}</strong></span>
-          </div>
-          <button 
-            type="button" 
-            onClick={() => setOtpCode(devOtp)}
-            className="text-[10px] bg-linen-gold hover:bg-charcoal-ink text-white px-2.5 py-1 rounded-none font-extrabold uppercase transition-colors shrink-0 cursor-pointer"
-          >
-            Autofill
-          </button>
-        </div>
-      )}
+
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -452,13 +433,13 @@ function SignupFormContent() {
         </p>
         <p className="text-3xs text-charcoal-ink/40 font-semibold leading-relaxed px-4">
           By creating an account, you agree to our{" "}
-          <a href="#" className="text-linen-gold underline font-bold">
+          <Link href="/terms" className="text-linen-gold underline font-bold">
             Terms of Service
-          </a>{" "}
+          </Link>{" "}
           and{" "}
-          <a href="#" className="text-linen-gold underline font-bold">
+          <Link href="/privacy" className="text-linen-gold underline font-bold">
             Privacy Policy
-          </a>
+          </Link>
         </p>
       </div>
     </div>

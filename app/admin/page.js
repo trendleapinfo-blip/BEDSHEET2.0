@@ -2769,7 +2769,6 @@ export default function AdminDashboard() {
                                 {userAcc ? (
                                   <div className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-md inline-block">
                                     <p className="font-extrabold uppercase">Login Account Active ({userAcc.role})</p>
-                                    <p className="text-[9px] font-medium mt-0.5 text-slate-500">Temp Password: <code className="font-mono bg-white px-1 py-0.2 rounded border font-extrabold select-all">staffpassword</code></p>
                                   </div>
                                 ) : s.status === "APPROVED" ? (
                                   <button

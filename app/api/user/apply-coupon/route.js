@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "@/lib/jwt";
+import { validateCouponServerSide } from "@/lib/couponValidation";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
-import Coupon from "@/models/Coupon";
 
 export async function POST(request) {
   try {
@@ -16,7 +16,7 @@ export async function POST(request) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      decoded = verifyToken(token);
     } catch (err) {
       return NextResponse.json({ error: "Invalid session token." }, { status: 401 });
     }
@@ -35,67 +35,18 @@ export async function POST(request) {
       return NextResponse.json({ error: "User not found." }, { status: 404 });
     }
 
-    if (user.accountType !== "Individual User") {
-      return NextResponse.json(
-        { error: "Coupon offers are only available for B2C Individual accounts, not B2B Commercial accounts." },
-        { status: 400 }
-      );
-    }
+    const couponRes = await validateCouponServerSide(couponCode, subtotal, user.accountType);
 
-    const uppercaseCode = couponCode.trim().toUpperCase();
-    const coupon = await Coupon.findOne({ code: uppercaseCode });
-
-    if (!coupon) {
-      return NextResponse.json({ error: "Invalid coupon code." }, { status: 404 });
-    }
-
-    if (!coupon.isActive) {
-      return NextResponse.json({ error: "This coupon is no longer active." }, { status: 400 });
-    }
-
-    const now = new Date();
-
-    if (coupon.startDate && now < new Date(coupon.startDate)) {
-      return NextResponse.json({ error: "This coupon promotion has not started yet." }, { status: 400 });
-    }
-
-    if (coupon.endDate && now > new Date(coupon.endDate)) {
-      return NextResponse.json({ error: "This coupon code has expired." }, { status: 400 });
-    }
-
-    if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
-      return NextResponse.json({ error: "This coupon usage limit has been reached." }, { status: 400 });
-    }
-
-    if (Number(subtotal) < coupon.minPurchase) {
-      return NextResponse.json(
-        { error: `Minimum order value of ₹${coupon.minPurchase} required to apply this coupon.` },
-        { status: 400 }
-      );
-    }
-
-    // Calculate discount
-    let discount = 0;
-    if (coupon.discountType === "percentage") {
-      discount = Math.round(Number(subtotal) * (coupon.discountValue / 100));
-      if (coupon.maxDiscount !== null && discount > coupon.maxDiscount) {
-        discount = coupon.maxDiscount;
-      }
-    } else if (coupon.discountType === "flat") {
-      discount = coupon.discountValue;
-    }
-
-    // Cap discount at subtotal
-    if (discount > Number(subtotal)) {
-      discount = Math.round(Number(subtotal));
+    if (!couponRes.valid) {
+      return NextResponse.json({ error: couponRes.error }, { status: 400 });
     }
 
     return NextResponse.json({
       success: true,
-      couponCode: coupon.code,
-      discountType: coupon.discountType,
-      discountValue: coupon.discountValue,
-      discount,
+      couponCode: couponRes.coupon.code,
+      discountType: couponRes.coupon.discountType,
+      discountValue: couponRes.coupon.discountValue,
+      discount: couponRes.discount,
     });
   } catch (error) {
     console.error("Apply Coupon API Error:", error);

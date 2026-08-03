@@ -3,6 +3,7 @@ import dbConnect from "@/lib/db";
 import Refund from "@/models/Refund";
 import Order from "@/models/Order";
 import User from "@/models/User";
+import Bundle from "@/models/Bundle";
 import { verifyAdmin } from "@/lib/adminAuth";
 
 export async function GET() {
@@ -29,18 +30,40 @@ export async function GET() {
 
       for (const order of expiredOrders) {
         const existingRefund = await Refund.findOne({
-          $or: [{ userId: order.userId }, { userEmail: order.email }],
-          planName: order.bundleName
+          $or: [
+            { orderId: order._id.toString() },
+            { orderId: order.bundleOrderId },
+            { $and: [{ $or: [{ userId: order.userId }, { userEmail: order.email }] }, { planName: order.bundleName }, { orderId: { $exists: false } }] }
+          ]
         });
 
         if (!existingRefund) {
+          // Query linked Bundle to check for returned item condition (DAMAGED / LOST)
+          const linkedBundle = await Bundle.findOne({
+            $or: [{ orderId: order._id.toString() }, { orderId: order.bundleOrderId }]
+          });
+
+          let damageDeduction = 0;
+          if (linkedBundle && linkedBundle.returnedItems && linkedBundle.returnedItems.length > 0) {
+            linkedBundle.returnedItems.forEach(item => {
+              if (item.condition === "DAMAGED") {
+                damageDeduction += 200; // Deduct ₹200 for damaged item
+              } else if (item.condition === "LOST") {
+                damageDeduction += 500; // Deduct ₹500 for lost item
+              }
+            });
+          }
+
+          const netRefundAmount = Math.max(0, order.depositCharged - damageDeduction);
+
           await Refund.create({
+            orderId: order._id.toString(),
             userId: order.userId || "GUEST",
             userName: order.userName || "Valued Customer",
             userEmail: order.email,
             userPhone: order.phone || "",
             planName: order.bundleName,
-            depositAmount: order.depositCharged,
+            depositAmount: netRefundAmount,
             status: "PENDING",
             cancelledAt: order.endDate || order.updatedAt || new Date()
           });

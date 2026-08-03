@@ -321,7 +321,23 @@ function CheckoutFormContent() {
       const res = await fetch("/api/payment/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ totalPrice: pricing.total })
+        body: JSON.stringify({
+          totalPrice: pricing.total,
+          orderDetails: {
+            bedType: plan.bedType,
+            planName: plan.planName,
+            price: pricing.base,
+            duration: plan.duration,
+            subscriptionType: plan.orderType === "BUY" ? "one-time" : subscriptionType,
+            securityDeposit: pricing.deposit,
+            gst: pricing.gst,
+            totalPrice: pricing.total,
+            couponCode: appliedCoupon ? appliedCoupon.couponCode : null,
+            discount: pricing.couponDiscount,
+            orderType: plan.orderType || "RENT",
+            itemTier: plan.orderType === "BUY" ? (plan.itemTier || "BASIC") : (subscriptionType === "weekly" ? "PREMIUM" : "BASIC")
+          }
+        })
       });
 
       const orderData = await res.json();

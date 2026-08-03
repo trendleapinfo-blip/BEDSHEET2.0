@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import Quote from "@/models/Quote";
 import Order from "@/models/Order";
@@ -262,7 +262,7 @@ export async function GET(request) {
       const cookieStore = await cookies();
       const token = cookieStore.get("token")?.value;
       if (token) {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+        const decoded = verifyToken(token);
         if (decoded?.userId) {
           sessionUser = await User.findById(decoded.userId).select("-password");
         }

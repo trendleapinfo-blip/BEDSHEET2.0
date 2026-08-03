@@ -56,6 +56,16 @@ export async function PUT(request) {
     if (durationMonths !== undefined) updateFields.durationMonths = Number(durationMonths) || 0;
     if (vendorEmail !== undefined) updateFields.vendorEmail = vendorEmail;
     
+    if (["CONFIRMED", "PAID"].includes(status)) {
+      const existingQuote = await Quote.findById(quoteId);
+      if (!existingQuote) {
+        return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+      }
+      if (!existingQuote.signatureData) {
+        return NextResponse.json({ error: "Cannot mark quote as CONFIRMED or PAID: Digital signature is missing from client." }, { status: 400 });
+      }
+    }
+
     if (status === "QUOTE SENT") {
         updateFields.agreementSentAt = new Date();
         // Mock sending email

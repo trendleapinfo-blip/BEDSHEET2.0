@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "@/lib/jwt";
+import { validateCouponServerSide } from "@/lib/couponValidation";
 import crypto from "crypto";
+import Razorpay from "razorpay";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Order from "@/models/Order";
 import Coupon from "@/models/Coupon";
 import BrandSettings from "@/models/BrandSettings";
 import Bundle from "@/models/Bundle";
+import DurationDiscount from "@/models/DurationDiscount";
 import { sendOrderConfirmationEmail } from "@/lib/mailer";
 
 export async function POST(request) {
@@ -21,7 +24,7 @@ export async function POST(request) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      decoded = verifyToken(token);
     } catch (err) {
       return NextResponse.json({ error: "Invalid session token." }, { status: 401 });
     }
@@ -83,28 +86,26 @@ export async function POST(request) {
       return NextResponse.json({ error: "User not found." }, { status: 404 });
     }
 
+    // Server-side Duration Discount verification
+    let durationDiscountPercent = 0;
+    if (duration) {
+      const parsedMonths = duration === "1 Month" ? 1 : duration === "3 Months" ? 3 : duration === "6 Months" ? 6 : duration === "12 Months" ? 12 : parseInt(duration) || 1;
+      const durationDiscountDoc = await DurationDiscount.findOne({ durationMonths: parsedMonths });
+      if (durationDiscountDoc) {
+        durationDiscountPercent = durationDiscountDoc.discountPercent;
+      }
+    }
+
     // Server-side validation of Coupon
     let calculatedDiscount = 0;
     let coupon = null;
     if (couponCode) {
-      if (user.accountType !== "Individual User") {
-        return NextResponse.json({ error: "Coupons are only available for B2C Individual Users." }, { status: 400 });
+      const couponRes = await validateCouponServerSide(couponCode, price, user.accountType);
+      if (!couponRes.valid) {
+        return NextResponse.json({ error: couponRes.error || "Invalid coupon code." }, { status: 400 });
       }
-      const uppercaseCode = couponCode.trim().toUpperCase();
-      coupon = await Coupon.findOne({ code: uppercaseCode });
-      if (coupon && coupon.isActive) {
-        if (coupon.discountType === "percentage") {
-          calculatedDiscount = Math.round(Number(price) * (coupon.discountValue / 100));
-          if (coupon.maxDiscount !== null && calculatedDiscount > coupon.maxDiscount) {
-            calculatedDiscount = coupon.maxDiscount;
-          }
-        } else if (coupon.discountType === "flat") {
-          calculatedDiscount = coupon.discountValue;
-        }
-        if (calculatedDiscount > Number(price)) {
-          calculatedDiscount = Math.round(Number(price));
-        }
-      }
+      calculatedDiscount = couponRes.discount;
+      coupon = couponRes.coupon;
     }
 
     // Fetch Brand Settings to check dynamic security deposits and payment style multipliers
@@ -138,6 +139,41 @@ export async function POST(request) {
     const discountedBase = Number(price) - calculatedDiscount;
     const computedGst = Math.round(discountedBase * 0.18);
     const computedTotalPrice = discountedBase + computedGst + computedDeposit;
+
+    // Fetch Razorpay Order and Payment details directly from Razorpay API to prevent amount tampering
+    const key_id = process.env.RAZORPAY_KEY_ID || "rzp_live_SEHTPEZotHKWW1";
+    const razorpay = new Razorpay({ key_id, key_secret });
+
+    let rzpOrder = null;
+    let rzpPayment = null;
+    try {
+      rzpOrder = await razorpay.orders.fetch(razorpay_order_id);
+      rzpPayment = await razorpay.payments.fetch(razorpay_payment_id);
+    } catch (rzpFetchErr) {
+      console.error("Razorpay API fetch error:", rzpFetchErr);
+      return NextResponse.json({ error: "Failed to verify transaction details with Razorpay servers." }, { status: 400 });
+    }
+
+    const expectedAmountInPaise = Math.round(computedTotalPrice * 100);
+
+    // Verify exact payment amount matches required computed total
+    if (!rzpOrder || Math.abs(rzpOrder.amount - expectedAmountInPaise) > 100) {
+      return NextResponse.json({
+        error: `Payment amount mismatch: Billed amount is ₹${computedTotalPrice}, but Razorpay order was created for ₹${(rzpOrder?.amount || 0) / 100}. Transaction rejected.`
+      }, { status: 400 });
+    }
+
+    if (!rzpPayment || Math.abs(rzpPayment.amount - expectedAmountInPaise) > 100) {
+      return NextResponse.json({
+        error: `Payment amount mismatch: Billed amount is ₹${computedTotalPrice}, but actual paid amount on Razorpay was ₹${(rzpPayment?.amount || 0) / 100}. Transaction rejected.`
+      }, { status: 400 });
+    }
+
+    if (rzpPayment.status !== "captured" && rzpPayment.status !== "authorized") {
+      return NextResponse.json({
+        error: `Payment verification failed: Razorpay payment status is '${rzpPayment?.status}'.`
+      }, { status: 400 });
+    }
 
     // Calculate End Date
     let endDate = new Date();
@@ -237,6 +273,7 @@ export async function POST(request) {
       durationMonths: duration === "1 Month" ? 1 : duration === "3 Months" ? 3 : duration === "6 Months" ? 6 : duration === "9 Months" ? 9 : 12,
       calculatedRent: Number(price),
       depositCharged: computedDeposit,
+      gst: computedGst,
       totalAmount: computedTotalPrice,
       finalPrice: computedTotalPrice,
       couponCode: coupon ? coupon.code : null,
@@ -251,6 +288,13 @@ export async function POST(request) {
       deliveryAddress: updatedUser.address || "—",
       razorpayPaymentId: razorpay_payment_id,
     });
+
+    if (coupon) {
+      await Coupon.findByIdAndUpdate(coupon._id, {
+        $inc: { usedCount: 1 },
+        $addToSet: { usedBy: user._id }
+      });
+    }
 
     // Auto-create matching Bundle for logistics and warehouse tracking
     try {
@@ -275,10 +319,6 @@ export async function POST(request) {
       });
     } catch (bErr) {
       console.error("Bundle auto-creation error:", bErr);
-    }
-
-    if (coupon) {
-      await Coupon.findByIdAndUpdate(coupon._id, { $inc: { usedCount: 1 } });
     }
 
     // Send beautiful email confirmation to the user
