@@ -99,7 +99,7 @@ Rules for your responses:
 
     // Construct the payload for the Sarvam AI completion endpoint.
     const payload = {
-      model: process.env.SARVAM_MODEL || "sarvam-2b",
+      model: process.env.SARVAM_MODEL || "sarvam-105b",
       messages: [
         { role: "system", content: systemPrompt },
         ...messages
