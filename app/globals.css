@@ -381,3 +381,118 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Blog Content Body Typography (MS Word Style) */
+.blog-content-body h2,
+.word-editor-canvas h2 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.85rem;
+  font-weight: 700;
+  color: #032026;
+  margin-top: 2.25rem;
+  margin-bottom: 1rem;
+  line-height: 1.25;
+  scroll-margin-top: 100px;
+}
+
+.blog-content-body h3,
+.word-editor-canvas h3 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #1A4F54;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  scroll-margin-top: 100px;
+}
+
+.blog-content-body p,
+.word-editor-canvas p {
+  margin-bottom: 1.25rem;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  color: #2D3748;
+}
+
+.blog-content-body ul,
+.word-editor-canvas ul {
+  list-style-type: disc;
+  padding-left: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.blog-content-body ol,
+.word-editor-canvas ol {
+  list-style-type: decimal;
+  padding-left: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.blog-content-body li,
+.word-editor-canvas li {
+  margin-bottom: 0.5rem;
+  line-height: 1.7;
+  color: #374151;
+}
+
+.blog-content-body blockquote,
+.word-editor-canvas blockquote {
+  border-left: 4px solid #05D4B5;
+  padding: 16px 22px;
+  background-color: #F0F6F6;
+  font-style: italic;
+  color: #032026;
+  margin: 1.75rem 0;
+  border-radius: 6px;
+}
+
+.blog-content-body table,
+.word-editor-canvas table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.75rem 0;
+  font-size: 0.925rem;
+  overflow-x: auto;
+  display: table;
+}
+
+.blog-content-body table thead tr,
+.word-editor-canvas table thead tr {
+  background-color: #032026;
+  color: #FFFFFF;
+}
+
+.blog-content-body table th,
+.blog-content-body table td,
+.word-editor-canvas table th,
+.word-editor-canvas table td {
+  padding: 12px 16px;
+  border: 1px solid #E2E8F0;
+}
+
+.blog-content-body table tbody tr:nth-child(even),
+.word-editor-canvas table tbody tr:nth-child(even) {
+  background-color: #FAF9F6;
+}
+
+.blog-content-body figure,
+.word-editor-canvas figure {
+  margin: 2rem 0;
+  text-align: center;
+}
+
+.blog-content-body figure img,
+.word-editor-canvas figure img {
+  max-width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  margin: 0 auto;
+}
+
+.blog-content-body figure figcaption,
+.word-editor-canvas figure figcaption {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #64748B;
+  font-style: italic;
+}

@@ -37,7 +37,8 @@ import {
   Download,
   Printer,
   Warehouse,
-  Settings
+  Settings,
+  BookOpen
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -1421,7 +1422,8 @@ export default function AdminDashboard() {
     { name: "Support Tickets", icon: HelpCircle },
     { name: "Refunds", icon: RefreshCcw },
     { name: "Waitlist", icon: Inbox },
-    { name: "Brand Settings", icon: Settings }
+    { name: "Brand Settings", icon: Settings },
+    { name: "Blog Studio", icon: BookOpen, href: "/admin/blog" }
   ];
 
   return (
@@ -1457,6 +1459,18 @@ export default function AdminDashboard() {
             {sidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.name;
+              if (item.href) {
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 rounded-none text-xs font-bold uppercase tracking-wider text-charcoal-ink/65 hover:bg-black/02 hover:text-charcoal-ink border border-transparent transition-all"
+                  >
+                    <Icon className="h-4.5 w-4.5 shrink-0 text-linen-gold" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              }
               return (
                 <button
                   key={item.name}

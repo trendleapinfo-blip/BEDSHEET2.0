@@ -189,6 +189,7 @@ export default function Footer({ showWaitlist = true }) {
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#05D4B5]">Explore</p>
             <ul className="space-y-1.5 text-2xs text-gray-300 font-medium">
               <li><Link href="/" className="hover:text-[#05D4B5] transition-colors">Home</Link></li>
+              <li><Link href="/blog" className="hover:text-[#05D4B5] transition-colors">Blog & Sleep Guides</Link></li>
               <li><Link href="/shop" className="hover:text-[#05D4B5] transition-colors">Shop Bedding</Link></li>
               <li><Link href="/about" className="hover:text-[#05D4B5] transition-colors">About Us</Link></li>
               <li><Link href="/location" className="hover:text-[#05D4B5] transition-colors">Service Locations</Link></li>
