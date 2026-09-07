@@ -16,50 +16,36 @@ export async function GET() {
       return NextResponse.json({ success: true, plans: [] }, { headers: { "Cache-Control": "no-store, max-age=0" } });
     }
 
-    const legacyMappedPlans = [];
+    const normalizedPlans = rawPlans.map(plan => {
+      const isSingle = (plan.bedType || "").toLowerCase().includes("single");
+      const bedTypeLabel = `Bedsheet + Pillow (${isSingle ? "Single" : "Double"})`;
+      const sizeLabel = isSingle ? "6x3 ft" : "6x5 ft";
+      const monthlyRate = plan.monthlyRate !== undefined ? plan.monthlyRate : (plan.price || 100);
+      const depositAmount = plan.depositAmount !== undefined ? plan.depositAmount : (plan.securityDeposit || 0);
 
-    rawPlans.forEach(plan => {
-      // Create a set of duration options for each plan tier and bedType based on the discounts table
-      rawDiscounts.forEach(discountObj => {
-        const dMonths = discountObj.durationMonths;
-        const dPercent = discountObj.discountPercent;
-        
-        let planName = plan.tier === "Premium" ? `${plan.bedType === "single" ? "Single" : "Double"} Bed Premium` : `${plan.bedType === "single" ? "Single" : "Double"} Bed Basic`;
-        let bedTypeLabel = `Bedsheet + Pillow (${plan.bedType === "single" ? "Single" : "Double"})`;
-        let sizeLabel = plan.bedType === "single" ? "6x3 ft" : "6x5 ft";
-        
-        let calculatedPrice = plan.monthlyRate * dMonths;
-        let originalPrice = null;
-        let discountBadge = null;
-
-        if (dPercent > 0) {
-          originalPrice = calculatedPrice;
-          calculatedPrice = Math.round(originalPrice * (1 - (dPercent / 100)));
-          discountBadge = `${dPercent}% off`;
-        }
-
-        legacyMappedPlans.push({
-          _id: `${plan._id}_${dMonths}`, // Mock ID
-          bedType: bedTypeLabel,
-          size: sizeLabel,
-          name: planName,
-          duration: dMonths === 1 ? "1 Month" : `${dMonths} Months`,
-          price: calculatedPrice,
-          originalPrice: originalPrice,
-          discount: discountBadge,
-          popular: dMonths >= 6 && plan.tier === "Premium",
-          badge: dMonths >= 6 ? "Best Value" : null,
-          features: [
-            `${dMonths === 1 ? "1" : dMonths} Swaps (${plan.tier === "Premium" ? "Weekly" : "Monthly"})`,
-            "Premium Quality",
-            "Free Doorstep Logistics"
-          ],
-          cta: "Choose Plan"
-        });
-      });
+      return {
+        _id: plan._id.toString(),
+        name: plan.name || `${plan.sheetsPerMonth || 1} Bed Sheet / Month`,
+        tier: plan.tier || "Normal",
+        bedType: bedTypeLabel,
+        bedTypeRaw: isSingle ? "single" : "double",
+        sheetsPerMonth: Number(plan.sheetsPerMonth) || 1,
+        monthlyRate: Number(monthlyRate),
+        depositAmount: Number(depositAmount),
+        price: Number(monthlyRate),
+        securityDeposit: Number(depositAmount),
+        size: sizeLabel,
+        duration: plan.duration || "1 Month",
+        features: plan.features && plan.features.length > 0 ? plan.features : [
+          "Clean Bedsheet Swaps",
+          "Premium 400 TC Cotton",
+          "Free Doorstep Logistics"
+        ],
+        cta: "Choose Plan"
+      };
     });
 
-    return NextResponse.json({ success: true, plans: legacyMappedPlans }, {
+    return NextResponse.json({ success: true, plans: normalizedPlans }, {
       headers: {
         "Cache-Control": "no-store, max-age=0"
       }

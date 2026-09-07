@@ -2,26 +2,49 @@ import mongoose from "mongoose";
 
 const PlanSchema = new mongoose.Schema(
   {
-    tier: {
-      type: String, // "Normal" | "Premium"
+    name: {
+      type: String,
       required: true,
-      enum: ["Normal", "Premium"],
+    },
+    tier: {
+      type: String,
+      default: "Normal",
     },
     bedType: {
-      type: String, // "single" | "double"
+      type: String, // "single" | "double" | "corporate"
       required: true,
-      enum: ["single", "double"],
+      trim: true,
+    },
+    sheetsPerMonth: {
+      type: Number, // 1 | 2 | 4
+      required: true,
     },
     monthlyRate: {
-      type: Number,
+      type: Number, // MRP for the month
       required: true,
     },
     depositAmount: {
-      type: Number,
+      type: Number, // Security deposit
       required: true,
+    },
+    price: {
+      type: Number,
+    },
+    securityDeposit: {
+      type: Number,
+    },
+    duration: {
+      type: String,
+      default: "1 Month",
+    },
+    features: {
+      type: [String],
+      default: [],
     },
   },
   { timestamps: true }
 );
 
 export default mongoose.models.Plan || mongoose.model("Plan", PlanSchema);
+
+

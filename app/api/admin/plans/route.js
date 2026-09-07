@@ -34,6 +34,8 @@ export async function POST(request) {
     const {
       tier,
       bedType,
+      sheetsPerMonth,
+      name,
       monthlyRate,
       depositAmount
     } = await request.json();
@@ -42,11 +44,18 @@ export async function POST(request) {
       return NextResponse.json({ error: "Tier, bed type, monthly rate, and deposit amount are required" }, { status: 400 });
     }
 
+    const sheets = Number(sheetsPerMonth) || 1;
+    const planName = name || `${sheets} Bed Sheet / Month`;
+
     const newPlan = await Plan.create({
-      tier,
+      tier: tier || "Normal",
       bedType,
+      sheetsPerMonth: sheets,
+      name: planName,
       monthlyRate: Number(monthlyRate),
-      depositAmount: Number(depositAmount)
+      depositAmount: Number(depositAmount),
+      price: Number(monthlyRate),
+      securityDeposit: Number(depositAmount)
     });
 
     return NextResponse.json({ success: true, plan: newPlan });
@@ -68,6 +77,8 @@ export async function PUT(request) {
       planId,
       tier,
       bedType,
+      sheetsPerMonth,
+      name,
       monthlyRate,
       depositAmount
     } = await request.json();
@@ -79,13 +90,21 @@ export async function PUT(request) {
     const updateData = {};
     if (tier !== undefined) updateData.tier = tier;
     if (bedType !== undefined) updateData.bedType = bedType;
-    if (monthlyRate !== undefined) updateData.monthlyRate = Number(monthlyRate);
-    if (depositAmount !== undefined) updateData.depositAmount = Number(depositAmount);
+    if (sheetsPerMonth !== undefined) updateData.sheetsPerMonth = Number(sheetsPerMonth);
+    if (name !== undefined) updateData.name = name;
+    if (monthlyRate !== undefined) {
+      updateData.monthlyRate = Number(monthlyRate);
+      updateData.price = Number(monthlyRate);
+    }
+    if (depositAmount !== undefined) {
+      updateData.depositAmount = Number(depositAmount);
+      updateData.securityDeposit = Number(depositAmount);
+    }
 
     const updated = await Plan.findByIdAndUpdate(
       planId,
       updateData,
-      { returnDocument: 'after' }
+      { new: true }
     );
 
     if (!updated) {

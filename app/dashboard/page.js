@@ -35,6 +35,16 @@ import {
   AlertTriangle
 } from "lucide-react";
 
+const formatDate = (dateVal) => {
+  if (!dateVal) return "—";
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export default function Dashboard() {
   const router = useRouter();
   
@@ -193,12 +203,6 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchDashboardData();
-    fetchTickets();
-    fetchPlans();
-  }, []);
-
   // Fetch Tickets
   const fetchTickets = async () => {
     try {
@@ -211,6 +215,12 @@ export default function Dashboard() {
       console.error("Error fetching tickets:", err);
     }
   };
+
+  useEffect(() => {
+    fetchDashboardData();
+    fetchTickets();
+    fetchPlans();
+  }, []);
 
   // Calculate B2B quote estimates automatically
   useEffect(() => {
@@ -750,7 +760,7 @@ export default function Dashboard() {
                       </h4>
                       <p className="text-3xs text-charcoal-ink/60 font-semibold leading-relaxed max-w-2xl">
                         {refunds[0].status === "PENDING" && `Your subscription to "${refunds[0].planName}" has been cancelled. Our logistics team will collect the sheets soon. Once inspected, your deposit of ₹${refunds[0].depositAmount} will be refunded.`}
-                        {refunds[0].status === "REFUNDED" && `Your security deposit of ₹${refunds[0].depositAmount} was successfully refunded on ${new Date(refunds[0].refundedAt).toLocaleDateString()}. Transaction Reference: ${refunds[0].transactionId || "Direct Gateway Transfer"}.`}
+                        {refunds[0].status === "REFUNDED" && `Your security deposit of ₹${refunds[0].depositAmount} was successfully refunded on ${formatDate(refunds[0].refundedAt)}. Transaction Reference: ${refunds[0].transactionId || "Direct Gateway Transfer"}.`}
                         {refunds[0].status === "REJECTED" && `Your refund claim for "${refunds[0].planName}" was rejected. Please contact our support desk for further dispute clarification.`}
                       </p>
                     </div>
@@ -815,7 +825,12 @@ export default function Dashboard() {
                           <h3 className="text-xl sm:text-2xl font-bold font-serif text-white">{user.selectedPlan.planName}</h3>
                           <p className="text-white/70 text-xs font-semibold mt-1 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-linen-gold"></span>
-                            {user.selectedPlan.bedType === "single" ? "Single Bed size" : user.selectedPlan.bedType === "double" ? "Double Bed size" : "Corporate custom rates"}
+                            {(() => {
+                              const bType = (user.selectedPlan.bedType || "").toLowerCase();
+                              if (bType.includes("single")) return "Single Bed Size";
+                              if (bType.includes("double")) return "Double Bed Size";
+                              return "Corporate Custom Setup";
+                            })()}
                             {" • "}
                             <span className="text-linen-gold font-extrabold uppercase">
                               {user.selectedPlan.orderType === "BUY" ? (user.selectedPlan.itemTier === "PREMIUM" ? "Premium Tier" : "Basic Tier") : (user.selectedPlan.subscriptionType === "weekly" ? "Weekly Change" : "Monthly Kit")}
@@ -829,56 +844,73 @@ export default function Dashboard() {
                           </div>
                           {user.selectedPlan.isPaused && (
                             <p className="text-[10px] text-amber-400 font-bold mt-2 uppercase tracking-wide">
-                              ⏸️ Vacation Pause Active until {new Date(user.selectedPlan.pausedUntil).toLocaleDateString()}
+                              ⏸️ Vacation Pause Active until {formatDate(user.selectedPlan.pausedUntil)}
                             </p>
                           )}
                           {(() => {
-                            const pStart = user.selectedPlan.startDate ? new Date(user.selectedPlan.startDate) : null;
-                            let pEnd = user.selectedPlan.endDate ? new Date(user.selectedPlan.endDate) : null;
-                            if (!pEnd && pStart) {
+                            const pStart = user.selectedPlan.startDate ? new Date(user.selectedPlan.startDate) : new Date();
+                            const dur = (user.selectedPlan.duration || "").toLowerCase();
+                            let pEnd = null;
+
+                            if (dur.includes("3 month") || dur.includes("quarterly")) {
                               pEnd = new Date(pStart);
-                              const dur = (user.selectedPlan.duration || "").toLowerCase();
-                              if (dur.includes("3 month")) pEnd.setMonth(pEnd.getMonth() + 3);
-                              else if (dur.includes("6 month")) pEnd.setMonth(pEnd.getMonth() + 6);
-                              else if (dur.includes("12 month")) pEnd.setFullYear(pEnd.getFullYear() + 1);
-                              else pEnd.setMonth(pEnd.getMonth() + 1);
+                              pEnd.setMonth(pEnd.getMonth() + 3);
+                            } else if (dur.includes("6 month")) {
+                              pEnd = new Date(pStart);
+                              pEnd.setMonth(pEnd.getMonth() + 6);
+                            } else if (dur.includes("9 month")) {
+                              pEnd = new Date(pStart);
+                              pEnd.setMonth(pEnd.getMonth() + 9);
+                            } else if (dur.includes("12 month") || dur.includes("yearly") || dur.includes("annual")) {
+                              pEnd = new Date(pStart);
+                              pEnd.setFullYear(pEnd.getFullYear() + 1);
+                            } else if (user.selectedPlan.endDate) {
+                              pEnd = new Date(user.selectedPlan.endDate);
+                            } else {
+                              pEnd = new Date(pStart);
+                              pEnd.setMonth(pEnd.getMonth() + 1);
                             }
+
                             const isExpired = pEnd && new Date() > pEnd;
+                            const depositVal = Number(user.selectedPlan.securityDeposit || 0);
 
                             return (
                               <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
                                 <div className="flex justify-between items-center text-xs">
                                   <span className="text-white/60 font-semibold">Next Billing Date:</span>
                                   <span className={`font-extrabold px-2 py-0.5 rounded text-2xs uppercase ${isExpired ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
-                                    {isExpired ? `Expired (${pEnd.toLocaleDateString()})` : pEnd ? pEnd.toLocaleDateString() : "—"}
+                                    {isExpired ? `Expired (${formatDate(pEnd)})` : pEnd ? formatDate(pEnd) : "—"}
                                   </span>
                                 </div>
                                 <div className="mt-2 space-y-2">
-                                  <button
-                                    onClick={() => handleSelectPlan(user.selectedPlan.bedType || "single", user.selectedPlan.planName, user.selectedPlan.price, user.selectedPlan.duration || "1 Month")}
-                                    className={`w-full py-2.5 px-4 rounded-none font-extrabold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                                      isExpired 
-                                        ? "bg-linen-gold hover:bg-white hover:text-charcoal-ink text-white shadow-lg" 
-                                        : "bg-linen-gold hover:bg-white hover:text-charcoal-ink text-white"
-                                    }`}
-                                  >
-                                    <CreditCard className="w-4 h-4" />
-                                    {isExpired ? `Renew Now — Pay Next Cycle (₹${user.selectedPlan.price})` : `Pay Next Billing Cycle (₹${user.selectedPlan.price})`}
-                                  </button>
+                                  {isExpired ? (
+                                    <button
+                                      onClick={() => handleSelectPlan(user.selectedPlan.bedType || "single", user.selectedPlan.planName, user.selectedPlan.price, user.selectedPlan.duration || "1 Month")}
+                                      className="w-full py-2.5 px-4 rounded-none font-extrabold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer bg-linen-gold hover:bg-white hover:text-charcoal-ink text-white shadow-lg"
+                                    >
+                                      <CreditCard className="w-4 h-4" />
+                                      Renew Now — Pay Next Cycle (₹{user.selectedPlan.price})
+                                    </button>
+                                  ) : (
+                                    <div className="w-full py-2.5 px-4 rounded-none font-bold text-2xs uppercase tracking-widest bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center justify-center gap-2">
+                                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                                      Prepaid Active Until {pEnd ? formatDate(pEnd) : "—"}
+                                    </div>
+                                  )}
                                   <button
                                     onClick={handleCancelSubscription}
                                     className="w-full py-2 px-4 rounded-none bg-rose-500/20 hover:bg-rose-500 text-rose-200 hover:text-white border border-rose-500/30 font-bold text-2xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
-                                    Cancel Subscription & Claim ₹{user.selectedPlan.securityDeposit || 500} Deposit
+                                    Cancel Subscription{depositVal > 0 ? ` & Claim ₹${depositVal} Deposit` : ""}
                                   </button>
                                 </div>
                               </div>
                             );
                           })()}
                           <div className="mt-2.5 text-[10px] text-white/50 space-y-0.5 border-t border-white/10 pt-2 font-semibold">
-                            <p>GST (18%): ₹{user.selectedPlan.gst || 0} {user.selectedPlan.orderType !== "BUY" && `• Deposit: ₹${user.selectedPlan.securityDeposit || 0}`}</p>
-                            <p className="font-extrabold text-linen-gold">Total Amount Paid: ₹{user.selectedPlan.totalPrice || user.selectedPlan.price}</p>
+                            <p>GST (18%): ₹{user.selectedPlan.gst || 0} {user.selectedPlan.orderType !== "BUY" && `• Deposit: ₹${Number(user.selectedPlan.securityDeposit || 0)}`}</p>
+                            <p className="font-extrabold text-linen-gold">Total Amount Paid: ₹{user.selectedPlan.totalPrice !== undefined ? user.selectedPlan.totalPrice : user.selectedPlan.price}</p>
                           </div>
                         </div>
                       ) : (
@@ -896,7 +928,7 @@ export default function Dashboard() {
                         <>
                           <span className="text-white/40 text-2xs font-semibold">
                             {user.selectedPlan.orderType === "BUY" ? "Purchased on " : "Started "}
-                            {new Date(user.selectedPlan.startDate).toLocaleDateString()}
+                            {formatDate(user.selectedPlan.startDate)}
                           </span>
                           <button 
                             onClick={() => setActiveTab("subscription")}
@@ -968,7 +1000,7 @@ export default function Dashboard() {
                                   <span>Plan Expired (Swap Services Paused)</span>
                                 </div>
                                 <p className="text-[11px] text-rose-900/70 font-semibold leading-relaxed">
-                                  Your subscription cycle ended on {pEnd.toLocaleDateString()}. Automated sheet swap deliveries are currently paused.
+                                  Your subscription cycle ended on {formatDate(pEnd)}. Automated sheet swap deliveries are currently paused.
                                 </p>
                                 <p className="text-[10px] text-rose-600 font-bold">
                                   Please renew your subscription to resume automated deliveries.
@@ -1055,7 +1087,7 @@ export default function Dashboard() {
                           <p className={`text-xs font-bold ${step1Done ? "text-charcoal-ink" : "text-charcoal-ink/40"}`}>
                             {user.selectedPlan.orderType === "BUY" ? "Order Confirmed" : "Subscription Created"}
                           </p>
-                          <p className="text-charcoal-ink/40 text-3xs font-semibold mt-0.5">Activated on {new Date(user.selectedPlan.startDate).toLocaleDateString()}</p>
+                          <p className="text-charcoal-ink/40 text-3xs font-semibold mt-0.5">Activated on {formatDate(user.selectedPlan.startDate)}</p>
                         </div>
                       </div>
  
@@ -1269,7 +1301,7 @@ export default function Dashboard() {
                       </p>
                       {user.selectedPlan.isPaused && (
                         <p className="text-3xs text-amber-600 font-bold uppercase mt-2">
-                          Vacation mode resumes automatically on {new Date(user.selectedPlan.pausedUntil).toLocaleDateString()} ({user.selectedPlan.pauseDuration}) • Action: {user.selectedPlan.pauseAction === "pickup" ? "Linen collection requested" : "Keep sheets at home"}.
+                          Vacation mode resumes automatically on {formatDate(user.selectedPlan.pausedUntil)} ({user.selectedPlan.pauseDuration}) • Action: {user.selectedPlan.pauseAction === "pickup" ? "Linen collection requested" : "Keep sheets at home"}.
                         </p>
                       )}
                     </div>
@@ -1360,13 +1392,18 @@ export default function Dashboard() {
                               {singlePlans.map((p, idx) => (
                                 <div key={idx} className="flex items-center justify-between p-3.5 bg-alabaster-linen hover:bg-white rounded-none border border-charcoal-ink/05 hover:border-charcoal-ink/15 transition-all">
                                   <div>
-                                    <span className="font-bold text-charcoal-ink text-xs block">{p.name} ({p.duration})</span>
-                                    <span className="text-[10px] text-charcoal-ink/50 font-semibold truncate max-w-[150px] inline-block">{p.features && p.features[0] ? p.features[0] : "4 Single Bedsheets"}</span>
+                                    <span className="font-bold text-charcoal-ink text-xs block">{p.name}</span>
+                                    <span className="text-[10px] text-charcoal-ink/50 font-semibold truncate max-w-[160px] inline-block">
+                                      Deposit: ₹{p.securityDeposit || p.depositAmount} (Refundable)
+                                    </span>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-charcoal-ink text-xs">₹{p.price}</span>
+                                    <div className="text-right">
+                                      <span className="font-bold text-charcoal-ink text-xs block">₹{p.price}/mo</span>
+                                      <span className="text-[9px] text-teal-650 font-bold block">+₹{p.securityDeposit || p.depositAmount} Dep</span>
+                                    </div>
                                     <button
-                                      onClick={() => handleSelectPlan("single", p.name, Number(p.price), p.duration)}
+                                      onClick={() => handleSelectPlan("single", p.name, Number(p.price), p.duration || "1 Month")}
                                       disabled={planSubmitting}
                                       className="py-1.5 px-3.5 rounded-none bg-charcoal-ink hover:bg-linen-gold text-white font-bold text-[10px] uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50"
                                     >
@@ -1393,13 +1430,18 @@ export default function Dashboard() {
                               {doublePlans.map((p, idx) => (
                                 <div key={idx} className="flex items-center justify-between p-3.5 bg-alabaster-linen hover:bg-white rounded-none border border-charcoal-ink/05 hover:border-charcoal-ink/15 transition-all">
                                   <div>
-                                    <span className="font-bold text-charcoal-ink text-xs block">{p.name} ({p.duration})</span>
-                                    <span className="text-[10px] text-charcoal-ink/50 font-semibold truncate max-w-[150px] inline-block">{p.features && p.features[0] ? p.features[0] : "4 Double Bedsheets"}</span>
+                                    <span className="font-bold text-charcoal-ink text-xs block">{p.name}</span>
+                                    <span className="text-[10px] text-charcoal-ink/50 font-semibold truncate max-w-[160px] inline-block">
+                                      Deposit: ₹{p.securityDeposit || p.depositAmount} (Refundable)
+                                    </span>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-charcoal-ink text-xs">₹{p.price}</span>
+                                    <div className="text-right">
+                                      <span className="font-bold text-charcoal-ink text-xs block">₹{p.price}/mo</span>
+                                      <span className="text-[9px] text-teal-650 font-bold block">+₹{p.securityDeposit || p.depositAmount} Dep</span>
+                                    </div>
                                     <button
-                                      onClick={() => handleSelectPlan("double", p.name, Number(p.price), p.duration)}
+                                      onClick={() => handleSelectPlan("double", p.name, Number(p.price), p.duration || "1 Month")}
                                       disabled={planSubmitting}
                                       className="py-1.5 px-3.5 rounded-none bg-charcoal-ink hover:bg-linen-gold text-white font-bold text-[10px] uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50"
                                     >
@@ -1409,6 +1451,7 @@ export default function Dashboard() {
                                 </div>
                               ))}
                             </div>
+
                           </div>
                         </div>
                       </div>
@@ -1680,7 +1723,7 @@ export default function Dashboard() {
                               {t.subject}
                             </p>
                             <p className="text-[10px] text-charcoal-ink/40 font-semibold mt-2.5">
-                              Created {new Date(t.createdAt).toLocaleDateString()}
+                              Created {formatDate(t.createdAt)}
                             </p>
                           </div>
                         ))}

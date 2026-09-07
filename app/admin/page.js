@@ -41,6 +41,16 @@ import {
   BookOpen
 } from "lucide-react";
 
+const formatDate = (dateVal) => {
+  if (!dateVal) return "—";
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [sessionUser, setSessionUser] = useState(null);
@@ -137,7 +147,7 @@ export default function AdminDashboard() {
   const [ticketForm, setTicketForm] = useState({ subject: "", userName: "", userEmail: "", priority: "MEDIUM", status: "OPEN" });
 
   const [showPlanModal, setShowPlanModal] = useState(false);
-  const [planForm, setPlanForm] = useState({ id: "", tier: "Normal", bedType: "single", monthlyRate: 0, depositAmount: 0 });
+  const [planForm, setPlanForm] = useState({ id: "", tier: "Normal", bedType: "single", sheetsPerMonth: 1, name: "1 Bed Sheet / Month", monthlyRate: 100, depositAmount: 200 });
 
   const [productColorsList, setProductColorsList] = useState([]);
   const [colorBedType, setColorBedType] = useState("");
@@ -811,9 +821,14 @@ export default function AdminDashboard() {
     e.preventDefault();
     const isEdit = !!planForm.id;
     const method = isEdit ? "PUT" : "POST";
+    const sheets = Number(planForm.sheetsPerMonth) || 1;
+    const planName = planForm.name || `${sheets} Bed Sheet${sheets > 1 ? 's' : ''} / Month`;
+
     const body = {
-      tier: planForm.tier,
-      bedType: planForm.bedType,
+      tier: planForm.tier || "Normal",
+      bedType: planForm.bedType || "single",
+      sheetsPerMonth: sheets,
+      name: planName,
       monthlyRate: Number(planForm.monthlyRate),
       depositAmount: Number(planForm.depositAmount)
     };
@@ -830,7 +845,7 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         setShowPlanModal(false);
-        setPlanForm({ id: "", tier: "Normal", bedType: "single", monthlyRate: 0, depositAmount: 0 });
+        setPlanForm({ id: "", tier: "Normal", bedType: "single", sheetsPerMonth: 1, name: "1 Bed Sheet / Month", monthlyRate: 100, depositAmount: 200 });
         fetchData();
         alert(isEdit ? "Plan updated successfully!" : "Plan created successfully!");
       } else {
@@ -844,12 +859,15 @@ export default function AdminDashboard() {
   };
 
   const handleEditPlan = (plan) => {
+    const sheets = plan.sheetsPerMonth || 1;
     setPlanForm({
       id: plan._id,
       tier: plan.tier || "Normal",
       bedType: plan.bedType || "single",
-      monthlyRate: plan.monthlyRate || 0,
-      depositAmount: plan.depositAmount || 0
+      sheetsPerMonth: sheets,
+      name: plan.name || `${sheets} Bed Sheet${sheets > 1 ? 's' : ''} / Month`,
+      monthlyRate: plan.monthlyRate || plan.price || 0,
+      depositAmount: plan.depositAmount || plan.securityDeposit || 0
     });
     setShowPlanModal(true);
   };
@@ -1429,10 +1447,10 @@ export default function AdminDashboard() {
   return (
     <div className="flex h-screen bg-alabaster-linen text-charcoal-ink font-sans antialiased overflow-hidden admin-theme">
       {/* SIDEBAR */}
-      <aside className="w-64 bg-white border-r border-black/05 flex flex-col justify-between shrink-0 z-20">
-        <div>
+      <aside className="w-64 bg-white border-r border-black/05 flex flex-col justify-between shrink-0 z-20 h-full overflow-hidden">
+        <div className="flex-1 overflow-y-auto min-h-0 py-1">
           {/* Sidebar Header */}
-          <div className="p-6 border-b border-black/05 flex items-center justify-between">
+          <div className="p-6 border-b border-black/05 flex items-center justify-between sticky top-0 bg-white z-10">
             <Link href="/" className="flex items-center gap-2">
               <span className="text-xl font-serif font-bold bg-gradient-to-r from-linen-gold to-charcoal-ink bg-clip-text text-transparent">
                 ClosetRush
@@ -1455,7 +1473,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="px-3 space-y-1">
+          <nav className="px-3 pb-6 space-y-1">
             {sidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.name;
@@ -1489,7 +1507,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-black/05 space-y-2">
+        <div className="p-4 border-t border-black/05 space-y-2 bg-white shrink-0">
           <Link
             href="/"
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-none text-xs font-bold uppercase tracking-wider text-charcoal-ink/60 hover:bg-black/02 hover:text-charcoal-ink border border-transparent transition-all"
@@ -2212,8 +2230,8 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="p-4 space-y-0.5 text-[10px] text-slate-400 font-medium">
-                              <p>Start: {new Date(o.startDate).toLocaleDateString()}</p>
-                              {o.endDate && <p>End: {new Date(o.endDate).toLocaleDateString()}</p>}
+                              <p>Start: {formatDate(o.startDate)}</p>
+                              {o.endDate && <p>End: {formatDate(o.endDate)}</p>}
                             </td>
                             <td className="p-4 text-slate-600 max-w-[200px] truncate" title={o.deliveryAddress}>
                               {o.deliveryAddress || "—"}
@@ -2570,11 +2588,11 @@ export default function AdminDashboard() {
                                       Price: <span className="text-teal-700 font-extrabold">₹{u.selectedPlan.price}</span> ({u.selectedPlan.duration || "1 Month"})
                                     </p>
                                     {startDate && (
-                                      <p className="text-[9px] text-slate-500 font-medium">Since {startDate.toLocaleDateString()}</p>
+                                      <p className="text-[9px] text-slate-500 font-medium">Since {formatDate(startDate)}</p>
                                     )}
                                     {expiryDate && (
                                       <p className={`text-[9px] font-extrabold pt-0.5 border-t border-slate-200/60 ${isExpired ? "text-rose-600" : "text-emerald-700"}`}>
-                                        {isExpired ? `Expired on: ${expiryDate.toLocaleDateString()}` : `Expires: ${expiryDate.toLocaleDateString()}`}
+                                        {isExpired ? `Expired on: ${formatDate(expiryDate)}` : `Expires: ${formatDate(expiryDate)}`}
                                       </p>
                                     )}
                                     <button
@@ -2617,7 +2635,7 @@ export default function AdminDashboard() {
                                   <span className="text-[8px] text-slate-400 block">• No Plan</span>
                                 )}
                               </td>
-                              <td className="p-4 text-slate-450">{new Date(u.createdAt).toLocaleDateString()}</td>
+                              <td className="p-4 text-slate-450">{formatDate(u.createdAt)}</td>
                               <td className="p-4">
                                 <div className="flex items-center gap-1.5">
                                   <button
@@ -2807,7 +2825,7 @@ export default function AdminDashboard() {
                                   {s.status}
                                 </span>
                               </td>
-                              <td className="p-4 text-slate-450">{new Date(s.registeredAt).toLocaleDateString()}</td>
+                              <td className="p-4 text-slate-450">{formatDate(s.registeredAt)}</td>
                               <td className="p-4 text-right">
                                 <div className="flex gap-1.5 justify-end">
                                   {s.status !== "APPROVED" && (
@@ -2915,7 +2933,7 @@ export default function AdminDashboard() {
                               <td className="p-4 text-slate-500">{q.phone}</td>
                               <td className="p-4 text-slate-500 font-bold uppercase">{q.businessType}</td>
                               <td className="p-4 text-slate-600 truncate max-w-[150px]" title={q.message}>{q.message || "—"}</td>
-                              <td className="p-4 text-slate-450">{new Date(q.receivedAt).toLocaleDateString()}</td>
+                              <td className="p-4 text-slate-450">{formatDate(q.receivedAt)}</td>
                               <td className="p-4">
                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${q.status === "ACCEPTED" ? "bg-teal-50 text-teal-650 border-teal-200" :
                                     q.status === "CONTACTED" ? "bg-blue-50 text-blue-650 border-blue-200" :
@@ -3124,7 +3142,7 @@ export default function AdminDashboard() {
                                 {t.status}
                               </span>
                             </td>
-                            <td className="p-4 text-slate-450">{new Date(t.createdAt).toLocaleDateString()}</td>
+                            <td className="p-4 text-slate-450">{formatDate(t.createdAt)}</td>
                             <td className="p-4 text-right">
                               <div className="flex gap-2 justify-end items-center">
                                 <button
@@ -3273,8 +3291,8 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="p-4 space-y-1 text-[10px] text-slate-500 font-medium">
-                              <p>Cancelled: {new Date(r.cancelledAt).toLocaleDateString()}</p>
-                              {r.refundedAt && <p>Processed: {new Date(r.refundedAt).toLocaleDateString()}</p>}
+                              <p>Cancelled: {formatDate(r.cancelledAt)}</p>
+                              {r.refundedAt && <p>Processed: {formatDate(r.refundedAt)}</p>}
                               {r.transactionId && <p className="text-teal-600 font-bold">TxID: {r.transactionId}</p>}
                             </td>
                             <td className="p-4">
@@ -3813,7 +3831,7 @@ export default function AdminDashboard() {
                             </td>
                             <td className="py-4.5 text-slate-500">₹{coupon.minPurchase || 0}</td>
                             <td className="py-4.5 text-slate-500">
-                              {coupon.endDate ? new Date(coupon.endDate).toLocaleDateString() : "Never Expires"}
+                              {coupon.endDate ? formatDate(coupon.endDate) : "Never Expires"}
                             </td>
                             <td className="py-4.5 text-slate-500">
                               {coupon.usedCount} / {coupon.usageLimit !== null ? coupon.usageLimit : "∞"}
@@ -3869,7 +3887,7 @@ export default function AdminDashboard() {
                 </div>
                 <button
                   onClick={() => {
-                    setPlanForm({ id: "", bedType: categoriesList[0]?.name || "single", size: "", name: "", duration: "", price: "", originalPrice: "", discount: "", features: "", cta: "Choose Plan", popular: false, badge: "", securityDeposit: 0 });
+                    setPlanForm({ id: "", tier: "Normal", bedType: "single", sheetsPerMonth: 1, name: "1 Bed Sheet / Month", monthlyRate: 100, depositAmount: 200 });
                     setShowPlanModal(true);
                   }}
                   className="py-2.5 px-5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-500/10 flex items-center gap-1.5 transition-all cursor-pointer"
@@ -3879,30 +3897,26 @@ export default function AdminDashboard() {
               </div>
 
               {/* Plans Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {(() => {
-                  const allUniquePlanTypes = Array.from(new Set([
-                    ...categoriesList.map(c => c.name),
-                    ...plansList.map(p => p.bedType)
-                  ])).filter(Boolean);
+                  const bedTypeGroups = [
+                    { id: "single", label: "Single Bed Plans" },
+                    { id: "double", label: "Double Bed Plans" }
+                  ];
 
-                  if (allUniquePlanTypes.length === 0) {
-                    return (
-                      <div className="col-span-full text-center py-20 text-slate-405 text-xs font-bold bg-white border border-slate-200/60 rounded-3xl">
-                        No active categories or plans found. Click "Add New Plan" to configure plans.
-                      </div>
-                    );
-                  }
+                  return bedTypeGroups.map((group) => {
+                    const filteredPlans = plansList.filter(p => {
+                      const pBed = (p.bedType || "").toLowerCase();
+                      return pBed.includes(group.id);
+                    });
 
-                  return allUniquePlanTypes.map((type) => {
-                    const filteredPlans = plansList.filter(p => p.bedType === type);
                     return (
-                      <div key={type} className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-sm space-y-6 flex flex-col justify-between">
+                      <div key={group.id} className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-sm space-y-6 flex flex-col justify-between">
                         <div>
                           <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
                             <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                               <span className="h-2.5 w-2.5 rounded-full bg-teal-500"></span>
-                              {type} Plans
+                              {group.label}
                             </h3>
                             <span className="text-3xs font-black bg-slate-100 text-slate-650 px-2 py-0.5 rounded uppercase">
                               {filteredPlans.length} Plans
@@ -3914,12 +3928,12 @@ export default function AdminDashboard() {
                               <div key={plan._id} className="p-4 bg-slate-50 border border-slate-150 rounded-2xl relative hover:border-slate-250 transition-colors flex justify-between items-start">
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-slate-800 text-sm">{plan.tier} Tier</span>
-                                    <span className="text-[10px] bg-slate-200 text-slate-600 font-extrabold px-1.5 py-0.5 rounded capitalize">{plan.bedType} Bed</span>
+                                    <span className="font-bold text-slate-800 text-sm">{plan.name || `${plan.sheetsPerMonth || 1} Bed Sheet / Month`}</span>
+                                    <span className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200/60 font-extrabold px-2 py-0.5 rounded uppercase">{plan.bedType === "single" ? "Single Bed" : "Double Bed"}</span>
                                   </div>
-                                  <div className="flex items-baseline gap-2 text-xs text-slate-500">
-                                    <span className="text-slate-800 font-black text-sm">₹{plan.monthlyRate}/mo Rent</span>
-                                    <span className="text-teal-600 font-extrabold text-[10px]">₹{plan.depositAmount} Deposit</span>
+                                  <div className="flex items-baseline gap-3 text-xs text-slate-500">
+                                    <span className="text-slate-800 font-black text-sm">MRP: ₹{plan.monthlyRate || plan.price}/mo</span>
+                                    <span className="text-teal-600 font-extrabold text-[10px]">Deposit: ₹{plan.depositAmount || plan.securityDeposit}</span>
                                   </div>
                                 </div>
 
@@ -3942,7 +3956,7 @@ export default function AdminDashboard() {
                               </div>
                             ))}
                             {filteredPlans.length === 0 && (
-                              <div className="text-center py-12 text-slate-400 text-xs">No {type} plans configured yet. Click "Add New Plan" to start.</div>
+                              <div className="text-center py-12 text-slate-400 text-xs">No {group.label} configured yet. Click "Add New Plan" to start.</div>
                             )}
                           </div>
                         </div>
@@ -4337,7 +4351,7 @@ export default function AdminDashboard() {
                 <div className="space-y-2">
                   <label className="text-2xs text-slate-450 font-bold uppercase block">Tier</label>
                   <select
-                    value={planForm.tier}
+                    value={planForm.tier || "Normal"}
                     onChange={(e) => setPlanForm({ ...planForm, tier: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white font-bold transition-all"
                   >
@@ -4348,7 +4362,7 @@ export default function AdminDashboard() {
                 <div className="space-y-2">
                   <label className="text-2xs text-slate-450 font-bold uppercase block">Bed Type</label>
                   <select
-                    value={planForm.bedType}
+                    value={planForm.bedType || "single"}
                     onChange={(e) => setPlanForm({ ...planForm, bedType: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white font-bold transition-all"
                   >
@@ -4358,15 +4372,45 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-2xs text-slate-450 font-bold uppercase block">Sheets Quantity (Per Month)</label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={planForm.sheetsPerMonth || 1}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 1;
+                    const autoName = `${val} Bed Sheet${val > 1 ? 's' : ''} / Month`;
+                    setPlanForm({ ...planForm, sheetsPerMonth: val, name: autoName });
+                  }}
+                  placeholder="Enter sheet count (e.g. 1, 2, 3, 4, 5...)"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2.5 px-3.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white font-bold transition-all"
+                />
+                <p className="text-[10px] text-slate-400 font-medium">Type any sheet count (e.g. 1, 2, 3, 4, 5 sheets / month)</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-2xs text-slate-450 font-bold uppercase block">Plan Display Title</label>
+                <input
+                  type="text"
+                  required
+                  value={planForm.name || ""}
+                  onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                  placeholder="e.g. 1 Bed Sheet / Month"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2.5 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-all font-semibold"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-2xs text-slate-450 font-bold uppercase block">Monthly Rate (₹)</label>
+                  <label className="text-2xs text-slate-450 font-bold uppercase block">Monthly Rate / MRP (₹)</label>
                   <input
                     type="number"
                     required
                     value={planForm.monthlyRate}
                     onChange={(e) => setPlanForm({ ...planForm, monthlyRate: e.target.value })}
-                    placeholder="e.g. 300"
+                    placeholder="e.g. 100"
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2.5 px-3.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:bg-white transition-all font-semibold"
                   />
                 </div>
@@ -4377,7 +4421,7 @@ export default function AdminDashboard() {
                     required
                     value={planForm.depositAmount}
                     onChange={(e) => setPlanForm({ ...planForm, depositAmount: e.target.value })}
-                    placeholder="e.g. 500"
+                    placeholder="e.g. 200"
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-2.5 px-3.5 text-xs text-slate-800 focus:outline-none focus:border-teal-500 focus:bg-white transition-all font-bold"
                   />
                 </div>
@@ -4878,7 +4922,7 @@ export default function AdminDashboard() {
                           ) : (
                             <img src={selectedQuote.signatureData} alt="E-Signature" className="max-h-[50px] mx-auto border border-slate-200 bg-white mt-1 shadow-xs" />
                           )}
-                          <p className="text-[9px] text-slate-500 font-semibold mt-1">Signed by {selectedQuote.signedBy} on {new Date(selectedQuote.signedAt).toLocaleDateString()}</p>
+                          <p className="text-[9px] text-slate-500 font-semibold mt-1">Signed by {selectedQuote.signedBy} on {formatDate(selectedQuote.signedAt)}</p>
                         </div>
                       )}
                     </div>

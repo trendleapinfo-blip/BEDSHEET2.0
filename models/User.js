@@ -63,6 +63,7 @@ const UserSchema = new mongoose.Schema(
     selectedPlan: {
       bedType: { type: String },
       planName: { type: String },
+      sheetsPerMonth: { type: Number },
       price: { type: Number },
       duration: { type: String },
       subscriptionType: { type: String, enum: ["monthly", "weekly"], default: "monthly" },

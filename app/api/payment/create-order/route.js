@@ -47,7 +47,8 @@ export async function POST(request) {
       orderType,
       subscriptionType,
       itemTier,
-      paymentStyleId
+      paymentStyleId,
+      securityDeposit
     } = orderDetails;
 
     // Server-side Duration Discount verification
@@ -74,7 +75,9 @@ export async function POST(request) {
     const doubleDeposit = settings?.doubleBedDeposit ?? 800;
 
     const isSingleBed = (bedType || "").toLowerCase().includes("single");
-    const baseDeposit = isSingleBed ? singleDeposit : doubleDeposit;
+    const baseDeposit = securityDeposit !== undefined && !isNaN(Number(securityDeposit))
+      ? Number(securityDeposit)
+      : (isSingleBed ? singleDeposit : doubleDeposit);
 
     let depositMultiplier = 1;
     if (paymentStyleId) {
@@ -103,11 +106,11 @@ export async function POST(request) {
       return NextResponse.json({ error: "Invalid payable amount calculated on server." }, { status: 400 });
     }
 
-    const key_id = process.env.RAZORPAY_KEY_ID || "rzp_live_SEHTPEZotHKWW1";
+    const key_id = process.env.RAZORPAY_KEY_ID;
     const key_secret = process.env.RAZORPAY_KEY_SECRET;
 
-    if (!key_secret) {
-      return NextResponse.json({ error: "Razorpay keys are not configured in environment variables." }, { status: 500 });
+    if (!key_id || !key_secret) {
+      return NextResponse.json({ error: "Razorpay API keys (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) are not configured in environment variables." }, { status: 500 });
     }
 
     const razorpay = new Razorpay({

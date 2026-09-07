@@ -44,10 +44,10 @@ export default function ShopPage() {
 
   // Configuration States (Rentickle Configurator)
   const [customerType, setCustomerType] = useState("B2C"); // "B2C" (Individual) | "B2B" (Business)
-  const [selectedBedType, setSelectedBedType] = useState("Bedsheet + Pillow (Double)");
+  const [selectedBedType, setSelectedBedType] = useState("Bedsheet + Pillow (Single)");
   const [color, setColor] = useState("Classic White");
-  const [selectedDuration, setSelectedDuration] = useState("1 Month");
-  const [planType, setPlanType] = useState("Monthly"); // "Monthly" | "Advance"
+  const [selectedSheets, setSelectedSheets] = useState(1); // 1 | 2 | 4 sheets per month
+  const [selectedDuration, setSelectedDuration] = useState("Monthly"); // Monthly, Quarterly, 6 Months, 9 Months, Yearly
 
   // User session state
   const [user, setUser] = useState(null);
@@ -65,10 +65,6 @@ export default function ShopPage() {
         const data = await res.json();
         if (data.settings) {
           setSettings(data.settings);
-          if (data.settings.paymentStyles && data.settings.paymentStyles.length > 0) {
-            const hasMonthly = data.settings.paymentStyles.some(s => s.id === "Monthly");
-            setPlanType(hasMonthly ? "Monthly" : data.settings.paymentStyles[0].id);
-          }
         }
       }
     } catch (err) {
@@ -155,29 +151,12 @@ export default function ShopPage() {
     return () => { document.body.removeChild(script); };
   }, []);
 
-  // Sync selectedBedType when plans load
+  // Ensure selectedBedType is set appropriately
   useEffect(() => {
-    if (plans.length > 0) {
-      const uniqueBedTypes = Array.from(new Set(plans.map(p => p.bedType)));
-      if (uniqueBedTypes.length > 0 && !uniqueBedTypes.includes(selectedBedType)) {
-        setSelectedBedType(uniqueBedTypes[0]);
-      }
+    if (!selectedBedType.includes("Single") && !selectedBedType.includes("Double")) {
+      setSelectedBedType("Bedsheet + Pillow (Single)");
     }
-  }, [plans]);
-
-  // Sync selectedDuration when selectedBedType changes
-  useEffect(() => {
-    if (plans.length > 0) {
-      const activeDurations = plans
-        .filter(p => p.bedType === selectedBedType)
-        .map(p => p.duration);
-      if (activeDurations.length > 0) {
-        if (!activeDurations.includes(selectedDuration)) {
-          setSelectedDuration(activeDurations[0]);
-        }
-      }
-    }
-  }, [selectedBedType, plans]);
+  }, [selectedBedType]);
 
   const getFallbackColors = () => {
     const isSingle = selectedBedType.toLowerCase().includes("single");
@@ -307,36 +286,52 @@ export default function ShopPage() {
   // Calculate dynamic B2C pricing based on selection
   const getB2CPricing = () => {
     const isSingle = selectedBedType.toLowerCase().includes("single");
-    const depositAmt = settings
-      ? (isSingle ? settings.singleBedDeposit : settings.doubleBedDeposit)
-      : (isSingle ? 500 : 800);
+    const numSheets = Number(selectedSheets) || 1;
 
-    const activePaymentStyles = settings?.paymentStyles && settings.paymentStyles.length > 0
-      ? settings.paymentStyles
-      : [
-        { id: "Monthly", name: "Standard Monthly", description: "Requires refundable security deposit of ₹{deposit}", depositMultiplier: 1 },
-        { id: "Advance", name: "Advance Plan", description: "Pay full subscription upfront. Zero security deposit required.", depositMultiplier: 0 }
-      ];
-    const activeStyle = activePaymentStyles.find(s => s.id === planType) || activePaymentStyles[0];
-    const depositMultiplier = activeStyle ? (activeStyle.depositMultiplier !== undefined ? activeStyle.depositMultiplier : 1) : 1;
+    const matchedPlan = plans.find(p => {
+      const pIsSingle = (p.bedType && p.bedType.toLowerCase().includes("single")) || (p.bedTypeRaw === "single");
+      return (isSingle ? pIsSingle : !pIsSingle) && Number(p.sheetsPerMonth) === numSheets;
+    });
 
-    const expectedTier = depositMultiplier === 0 ? "Premium" : "Basic";
+    let baseMRP = isSingle ? 100 : 200;
+    let depositAmt = isSingle ? 200 : 400;
 
-    const matchedPlan = plans.find(p =>
-      p.bedType === selectedBedType &&
-      p.duration === selectedDuration &&
-      p.name.includes(expectedTier)
-    );
-    const planExists = !!matchedPlan;
+    if (matchedPlan) {
+      if (matchedPlan.monthlyRate !== undefined && matchedPlan.monthlyRate !== null) {
+        baseMRP = Number(matchedPlan.monthlyRate);
+      } else if (matchedPlan.price !== undefined && matchedPlan.price !== null) {
+        baseMRP = Number(matchedPlan.price);
+      }
 
-    if (!matchedPlan) {
-      return { subtotal: 0, couponDiscount: 0, discountedBase: 0, gst: 0, deposit: 0, total: 0, planExists: false };
+      if (matchedPlan.depositAmount !== undefined && matchedPlan.depositAmount !== null) {
+        depositAmt = Number(matchedPlan.depositAmount);
+      } else if (matchedPlan.securityDeposit !== undefined && matchedPlan.securityDeposit !== null) {
+        depositAmt = Number(matchedPlan.securityDeposit);
+      }
     }
 
-    const durationNumMatch = matchedPlan.duration.match(/\d+/);
-    const multiplier = durationNumMatch ? parseInt(durationNumMatch[0], 10) : 1;
+    let discountPercent = 0;
+    let durationMonths = 1;
 
-    const subtotal = matchedPlan.price;
+    if (selectedDuration === "Quarterly" || selectedDuration === "3 Months") {
+      discountPercent = 5;
+      durationMonths = 3;
+    } else if (selectedDuration === "6 Months") {
+      discountPercent = 10;
+      durationMonths = 6;
+    } else if (selectedDuration === "9 Months") {
+      discountPercent = 10;
+      durationMonths = 9;
+    } else if (selectedDuration === "Yearly" || selectedDuration === "12 Months") {
+      discountPercent = 20;
+      durationMonths = 12;
+    } else {
+      discountPercent = 0;
+      durationMonths = 1;
+    }
+
+    const effectiveMonthlyRate = Math.round(baseMRP * (1 - discountPercent / 100));
+    const subtotal = effectiveMonthlyRate * durationMonths;
 
     let couponDiscount = 0;
     if (appliedCoupon) {
@@ -349,19 +344,28 @@ export default function ShopPage() {
 
     const discountedBase = Math.max(0, subtotal - couponDiscount);
     const gst = Math.round(discountedBase * 0.18);
-
-    const deposit = Math.round(Number(depositAmt || 0) * depositMultiplier);
+    const deposit = depositAmt;
     const total = discountedBase + gst + deposit;
 
-    return { subtotal, couponDiscount, discountedBase, gst, deposit, total, planExists };
+    return {
+      baseMRP,
+      effectiveMonthlyRate,
+      durationMonths,
+      subtotal,
+      couponDiscount,
+      discountedBase,
+      gst,
+      deposit,
+      total,
+      discountPercent,
+      planExists: true
+    };
   };
 
   const b2cPricing = getB2CPricing();
 
-  const uniqueBedTypes = plans.length > 0 ? Array.from(new Set(plans.map(p => p.bedType))) : ["Bedsheet + Pillow (Single)", "Bedsheet + Pillow (Double)", "Curtains", "Quilts", "Blankets"];
-  const availableDurationsForBed = plans.length > 0
-    ? Array.from(new Set(plans.filter(p => p.bedType === selectedBedType).map(p => p.duration)))
-    : ["1 Month", "3 Months", "12 Months"];
+  const uniqueBedTypes = ["Bedsheet + Pillow (Single)", "Bedsheet + Pillow (Double)"];
+  const availableDurationsForBed = ["Monthly", "Quarterly", "6 Months", "9 Months", "Yearly"];
 
   // Send OTP handler
   const handleSendOtp = async () => {
@@ -559,15 +563,8 @@ export default function ShopPage() {
     setCheckoutLoading(true);
 
     try {
-      const activePaymentStyles = settings?.paymentStyles && settings.paymentStyles.length > 0
-        ? settings.paymentStyles
-        : [
-          { id: "Monthly", name: "Standard Monthly", depositMultiplier: 1 },
-          { id: "Advance", name: "Advance Plan", depositMultiplier: 0 }
-        ];
-      const activeStyle = activePaymentStyles.find(s => s.id === planType) || activePaymentStyles[0];
-      const itemTier = (activeStyle && activeStyle.depositMultiplier === 0) ? "PREMIUM" : "BASIC";
-      const sizeLabel = selectedBedType.charAt(0).toUpperCase() + selectedBedType.slice(1);
+      const itemTier = "BASIC";
+      const sizeLabel = selectedBedType;
 
       const orderRes = await fetch("/api/payment/create-order", {
         method: "POST",
@@ -576,9 +573,10 @@ export default function ShopPage() {
           totalPrice: b2cPricing.total,
           orderDetails: {
             bedType: selectedBedType,
-            planName: `${sizeLabel} Bed sheets (${selectedDuration} swap cycle)`,
+            planName: `${sizeLabel} (${selectedSheets} Bed Sheet${selectedSheets > 1 ? 's' : ''}/Mo - ${selectedDuration})`,
             price: b2cPricing.subtotal,
             duration: selectedDuration,
+            sheetsPerMonth: selectedSheets,
             subscriptionType: "monthly",
             securityDeposit: b2cPricing.deposit,
             gst: b2cPricing.gst,
@@ -611,9 +609,10 @@ export default function ShopPage() {
               razorpay_signature: response.razorpay_signature,
               orderDetails: {
                 bedType: selectedBedType,
-                planName: `${sizeLabel} Bed sheets (${selectedDuration} swap cycle)`,
+                planName: `${sizeLabel} (${selectedSheets} Bed Sheet${selectedSheets > 1 ? 's' : ''}/Mo - ${selectedDuration})`,
                 price: b2cPricing.subtotal,
                 duration: selectedDuration,
+                sheetsPerMonth: selectedSheets,
                 subscriptionType: "monthly",
                 securityDeposit: b2cPricing.deposit,
                 gst: b2cPricing.gst,
@@ -1049,13 +1048,13 @@ export default function ShopPage() {
                   <div className="bg-[#FCFBF9] p-4 rounded-2xl border border-[#032026]/10 text-3xs text-[#032026]/80 space-y-2 uppercase tracking-wider font-extrabold font-sans">
                     {selectedBedType.toLowerCase().includes("single") ? (
                       <>
-                        <p className="flex justify-between"><span>Premium Bed Sheets:</span> <span className="text-[#032026] font-black">4 Single Sheets</span></p>
-                        <p className="flex justify-between"><span>Sanitized Pillow Covers:</span> <span className="text-[#032026] font-black">4 Pillow Covers</span></p>
+                        <p className="flex justify-between"><span>Premium Bed Sheets:</span> <span className="text-[#032026] font-black">{selectedSheets} Single Sheet{selectedSheets > 1 ? 's' : ''}</span></p>
+                        <p className="flex justify-between"><span>Sanitized Pillow Covers:</span> <span className="text-[#032026] font-black">{selectedSheets} Pillow Cover{selectedSheets > 1 ? 's' : ''}</span></p>
                       </>
                     ) : (
                       <>
-                        <p className="flex justify-between"><span>Premium Bed Sheets:</span> <span className="text-[#032026] font-black">4 Double Sheets</span></p>
-                        <p className="flex justify-between"><span>Sanitized Pillow Covers:</span> <span className="text-[#032026] font-black">8 Pillow Covers</span></p>
+                        <p className="flex justify-between"><span>Premium Bed Sheets:</span> <span className="text-[#032026] font-black">{selectedSheets} Double Sheet{selectedSheets > 1 ? 's' : ''}</span></p>
+                        <p className="flex justify-between"><span>Sanitized Pillow Covers:</span> <span className="text-[#032026] font-black">{selectedSheets * 2} Pillow Cover{selectedSheets * 2 > 1 ? 's' : ''}</span></p>
                       </>
                     )}
                     <p className="flex justify-between"><span>Thread Count (TC):</span> <span className="text-[#05D4B5] font-black">400 TC Organic Cotton</span></p>
@@ -1083,121 +1082,115 @@ export default function ShopPage() {
             {/* Right Column: Interactive Configurator Panel */}
             <div className="lg:col-span-7 bg-white border border-[#032026]/10 p-6 sm:p-8 rounded-[28px] shadow-[0_15px_40px_rgba(0,0,0,0.03)] space-y-8">
               
-              {/* Bed Sizes selection */}
+              {/* Type (Select Bed Dimensions) */}
               <div className="space-y-3">
                 <span className="text-3xs uppercase tracking-widest text-[#032026]/50 font-black block">Type (Select Bed Dimensions)</span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {uniqueBedTypes.map((type) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { id: "Bedsheet + Pillow (Single)", label: "Bedsheet + Pillow (Single)" },
+                    { id: "Bedsheet + Pillow (Double)", label: "Bedsheet + Pillow (Double)" }
+                  ].map((item) => (
                     <button
-                      key={type}
-                      onClick={() => setSelectedBedType(type)}
-                      className={`py-3.5 px-3 border rounded-2xl text-center transition-all duration-300 cursor-pointer text-[10px] font-black uppercase tracking-widest ${
-                        selectedBedType === type
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedBedType(item.id)}
+                      className={`py-3.5 px-4 border rounded-2xl text-center transition-all duration-300 cursor-pointer text-xs font-black uppercase tracking-wider ${
+                        selectedBedType === item.id
                           ? "bg-[#032026] text-[#05D4B5] border-[#032026] shadow-lg shadow-[#032026]/10 scale-[1.02]"
                           : "bg-[#FCFBF9] border-[#032026]/10 hover:border-[#032026]/30 text-[#032026]"
                       }`}
                     >
-                      {getBedSizeLabel(type)}
+                      {item.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* B2C specific options: Tenure & Plan Style */}
+              {/* B2C specific options: Sheet Quantity & Tenure */}
               {customerType === "B2C" ? (
                 <>
-                  {/* Tenure */}
+                  {/* Sheets Quantity Selection (Dynamic from DB Plans) */}
+                  <div className="space-y-3">
+                    <span className="text-3xs uppercase tracking-widest text-[#032026]/50 font-black block">Select Sheets Quantity (Per Month)</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {(() => {
+                        const isSingle = selectedBedType.toLowerCase().includes("single");
+                        const filteredPlans = plans.filter(p => {
+                          const pIsSingle = (p.bedType && p.bedType.toLowerCase().includes("single")) || (p.bedTypeRaw === "single");
+                          return isSingle ? pIsSingle : !pIsSingle;
+                        });
+
+                        const activeOptions = filteredPlans.length > 0
+                          ? filteredPlans.sort((a, b) => (a.sheetsPerMonth || 1) - (b.sheetsPerMonth || 1))
+                          : [
+                              { sheetsPerMonth: 1, name: "1 Bed Sheet", monthlyRate: isSingle ? 100 : 200 },
+                              { sheetsPerMonth: 2, name: "2 Bed Sheets", monthlyRate: isSingle ? 200 : 400 },
+                              { sheetsPerMonth: 4, name: "4 Bed Sheets", monthlyRate: isSingle ? 800 : 800 }
+                            ];
+
+                        return activeOptions.map((opt, idx) => {
+                          const numSheets = opt.sheetsPerMonth || 1;
+                          const mrp = opt.monthlyRate !== undefined ? opt.monthlyRate : (opt.price || 100);
+                          const effectiveRate = Math.round(mrp * (1 - (b2cPricing.discountPercent || 0) / 100));
+                          const isSelected = selectedSheets === numSheets;
+                          const displayLabel = opt.name || `${numSheets} Bed Sheet${numSheets > 1 ? 's' : ''}`;
+
+                          return (
+                            <button
+                              key={opt._id || `${numSheets}_${idx}`}
+                              type="button"
+                              onClick={() => setSelectedSheets(numSheets)}
+                              className={`py-3.5 px-2 border rounded-2xl text-center transition-all duration-300 cursor-pointer ${
+                                isSelected
+                                  ? "bg-[#032026] text-[#05D4B5] border-[#032026] shadow-lg shadow-[#032026]/10 scale-[1.02]"
+                                  : "bg-[#FCFBF9] border-[#032026]/10 hover:border-[#032026]/30 text-[#032026]"
+                              }`}
+                            >
+                              <span className="text-[10px] font-black uppercase block tracking-wider">{displayLabel}</span>
+                              <span className={`text-[9px] font-bold block mt-0.5 ${isSelected ? "text-[#05D4B5]" : "text-[#032026]/60"}`}>
+                                {b2cPricing.discountPercent > 0 ? (
+                                  <>
+                                    <span className="line-through opacity-50 mr-1">₹{mrp}</span>
+                                    ₹{effectiveRate} / mo
+                                  </>
+                                ) : (
+                                  `₹${mrp} / mo`
+                                )}
+                              </span>
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Subscription Duration Tenure */}
                   <div className="space-y-3">
                     <span className="text-3xs uppercase tracking-widest text-[#032026]/50 font-black block">Subscription Duration Tenure</span>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {availableDurationsForBed.map((dur) => {
-                        const { displayName, discountText } = getTenureDetails(dur);
-                        const isSelected = selectedDuration === dur;
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {[
+                        { id: "Monthly", label: "Monthly", discount: null },
+                        { id: "Quarterly", label: "Quarterly", discount: "5% off" },
+                        { id: "6 Months", label: "6 Months", discount: "10% off" },
+                        { id: "9 Months", label: "9 Months", discount: "10% off" },
+                        { id: "Yearly", label: "Yearly", discount: "20% off" }
+                      ].map((tenure) => {
+                        const isSelected = selectedDuration === tenure.id;
                         return (
                           <button
-                            key={dur}
-                            onClick={() => setSelectedDuration(dur)}
+                            key={tenure.id}
+                            type="button"
+                            onClick={() => setSelectedDuration(tenure.id)}
                             className={`py-3.5 px-3 border rounded-2xl text-center transition-all duration-300 cursor-pointer ${
                               isSelected
                                 ? "bg-[#032026] text-[#05D4B5] border-[#032026] shadow-lg shadow-[#032026]/10 scale-[1.02]"
                                 : "bg-[#FCFBF9] border-[#032026]/10 hover:border-[#032026]/30 text-[#032026]"
                             }`}
                           >
-                            <span className="text-[10px] font-black uppercase block tracking-widest">{displayName}</span>
-                            {discountText && (
-                              <span className="text-[9px] font-bold text-[#05D4B5] block mt-0.5">{discountText}</span>
+                            <span className="text-[10px] font-black uppercase block tracking-wider">{tenure.label}</span>
+                            {tenure.discount && (
+                              <span className="text-[9px] font-bold text-[#05D4B5] block mt-0.5">{tenure.discount}</span>
                             )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Plan Type Selection */}
-                  <div className="space-y-3">
-                    <span className="text-3xs uppercase tracking-widest text-[#032026]/50 font-black block">Plan Payment Style</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {(settings?.paymentStyles && settings.paymentStyles.length > 0
-                        ? settings.paymentStyles
-                        : [
-                          { id: "Monthly", name: "Standard Monthly", description: "Requires refundable security deposit of ₹{deposit}", depositMultiplier: 1 },
-                          { id: "Advance", name: "Advance Plan", description: "Pay full subscription upfront. Zero security deposit required.", depositMultiplier: 0 }
-                        ]
-                      ).map((style) => {
-                        const isSingle = selectedBedType.toLowerCase().includes("single");
-                        const depositAmt = settings
-                          ? (isSingle ? settings.singleBedDeposit : settings.doubleBedDeposit)
-                          : (isSingle ? 500 : 800);
-                        const finalDeposit = Math.round(depositAmt * (style.depositMultiplier !== undefined ? style.depositMultiplier : 1));
-
-                        let desc = style.description || "";
-                        if (desc.includes("₹{deposit}")) {
-                          desc = desc.replace("₹{deposit}", `₹${finalDeposit}`);
-                        } else {
-                          desc = desc.replace("{deposit}", `₹${finalDeposit}`);
-                        }
-
-                        const isSelected = planType === style.id;
-                        const isZeroDeposit = style.depositMultiplier === 0;
-
-                        return (
-                          <button
-                            key={style.id}
-                            type="button"
-                            onClick={() => setPlanType(style.id)}
-                            className={`group p-5 border rounded-2xl text-left flex flex-col justify-between transition-all duration-300 hover:scale-[1.02] cursor-pointer relative overflow-hidden ${
-                              isSelected
-                                ? "bg-gradient-to-br from-[#032026] to-[#0D1518] text-white border-[#05D4B5]/40 shadow-xl shadow-[#05D4B5]/10"
-                                : "bg-white border-[#032026]/10 hover:border-[#05D4B5]/30 text-[#032026]"
-                            }`}
-                          >
-                            {isZeroDeposit && (
-                              <div className="absolute top-0 right-0">
-                                <span className="bg-emerald-500 text-white text-[8px] px-2.5 py-1 font-bold uppercase tracking-widest rounded-bl-xl">
-                                  Zero Deposit
-                                </span>
-                              </div>
-                            )}
-                            {style.id === "Advance" && !isZeroDeposit && (
-                              <div className="absolute top-0 right-0">
-                                <span className="bg-[#05D4B5] text-[#032026] text-[8px] px-2.5 py-1 font-extrabold uppercase tracking-widest rounded-bl-xl">
-                                  Popular
-                                </span>
-                              </div>
-                            )}
-                            <div className="space-y-1.5">
-                              <span className={`text-xs font-black uppercase tracking-widest block ${isSelected ? "text-[#05D4B5]" : "text-[#032026]"}`}>
-                                {style.name}
-                              </span>
-                              <span className={`text-3xs font-medium leading-relaxed block ${isSelected ? "text-gray-300" : "text-[#032026]/60"}`}>
-                                {desc}
-                              </span>
-                              <span className={`text-3xs font-extrabold uppercase tracking-widest block mt-3 border-t pt-2.5 ${isSelected ? "text-[#05D4B5] border-white/10" : "text-[#05D4B5] border-[#032026]/10"}`}>
-                                {style.id === "Monthly" || style.name.toLowerCase().includes("monthly")
-                                  ? "➔ All 4 sheets delivered together at once"
-                                  : "➔ Get 1 new fresh sheet swap every week"}
-                              </span>
-                            </div>
                           </button>
                         );
                       })}
@@ -1219,36 +1212,40 @@ export default function ShopPage() {
               {/* Footer configurator: Pricing or RFQ button */}
               <div className="pt-6 border-t border-[#032026]/10 space-y-6">
                 {customerType === "B2C" ? (
-                  plans.length === 0 ? (
-                    <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl text-xs text-amber-800 font-bold uppercase tracking-wider">
-                      Subscription plans are currently unavailable. Please check back later.
-                    </div>
-                  ) : !b2cPricing.planExists ? (
-                    <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl text-xs text-amber-800 font-bold uppercase tracking-wider">
-                      The selected combination ({getBedSizeLabel(selectedBedType)} - {selectedDuration}) is currently unavailable.
-                    </div>
-                  ) : (
-                    <div className="bg-[#FCFBF9] p-6 rounded-2xl border border-[#032026]/10 space-y-3.5 text-xs shadow-inner">
-                      <div className="flex justify-between items-baseline font-bold text-[#032026] uppercase tracking-widest text-3xs">
-                        <span>Upfront Plan Cost ({getTenureDetails(selectedDuration).displayName})</span>
-                        <span className="text-xs font-black">₹{b2cPricing.subtotal}</span>
+                  <div className="bg-[#FCFBF9] p-6 rounded-2xl border border-[#032026]/10 space-y-3.5 text-xs shadow-inner">
+                    <div className="flex justify-between items-baseline font-bold text-[#032026] uppercase tracking-widest text-3xs">
+                      <div>
+                        <span>Upfront Plan Cost ({b2cPricing.durationMonths} Month{b2cPricing.durationMonths > 1 ? 's' : ''})</span>
+                        {b2cPricing.discountPercent > 0 && (
+                          <span className="text-[9px] text-[#05D4B5] block font-normal lowercase tracking-normal font-sans">
+                            ₹{b2cPricing.effectiveMonthlyRate}/mo ({b2cPricing.discountPercent}% off)
+                          </span>
+                        )}
                       </div>
-                      {b2cPricing.deposit > 0 && (
-                        <div className="flex justify-between text-3xs text-[#032026]/75 font-bold uppercase tracking-widest">
-                          <span>Security Deposit (Refundable)</span>
-                          <span>+ ₹{b2cPricing.deposit}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-3xs text-[#032026]/40 font-bold uppercase tracking-widest">
-                        <span>GST flat tax (18%)</span>
-                        <span>+ ₹{b2cPricing.gst}</span>
-                      </div>
-                      <div className="border-t border-[#032026]/10 pt-4 flex justify-between items-baseline font-black uppercase text-2xs tracking-widest text-[#05D4B5]">
-                        <span>Total Checkout Upfront</span>
-                        <span className="text-2xl font-black text-[#032026] font-serif">₹{b2cPricing.total}</span>
-                      </div>
+                      <span className="text-xs font-black">
+                        {b2cPricing.discountPercent > 0 && (
+                          <span className="line-through text-gray-400 font-normal mr-1.5">
+                            ₹{b2cPricing.baseMRP * b2cPricing.durationMonths}
+                          </span>
+                        )}
+                        ₹{b2cPricing.subtotal}
+                      </span>
                     </div>
-                  )
+                    {b2cPricing.deposit > 0 && (
+                      <div className="flex justify-between text-3xs text-[#032026]/75 font-bold uppercase tracking-widest">
+                        <span>Security Deposit (Refundable)</span>
+                        <span>+ ₹{b2cPricing.deposit}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-3xs text-[#032026]/40 font-bold uppercase tracking-widest">
+                      <span>GST flat tax (18%)</span>
+                      <span>+ ₹{b2cPricing.gst}</span>
+                    </div>
+                    <div className="border-t border-[#032026]/10 pt-4 flex justify-between items-baseline font-black uppercase text-2xs tracking-widest text-[#05D4B5]">
+                      <span>Total Checkout Upfront</span>
+                      <span className="text-2xl font-black text-[#032026] font-serif">₹{b2cPricing.total}</span>
+                    </div>
+                  </div>
                 ) : (
                   <div className="bg-[#FCFBF9] p-5 rounded-2xl border border-[#032026]/10 text-3xs flex justify-between items-center font-bold text-[#032026] uppercase tracking-widest">
                     <span>B2B pricing range</span>
@@ -1266,7 +1263,6 @@ export default function ShopPage() {
                 )}
 
                 <button
-                  disabled={customerType === "B2C" && (plans.length === 0 || !b2cPricing.planExists)}
                   onClick={() => {
                     if (user) {
                       setActiveStep(3);
@@ -1274,13 +1270,12 @@ export default function ShopPage() {
                       setActiveStep(2);
                     }
                   }}
-                  className="w-full py-4.5 bg-[#05D4B5] hover:bg-[#032026] text-[#032026] hover:text-white font-extrabold text-xs uppercase tracking-[0.15em] transition-all duration-300 rounded-full shadow-xl shadow-[#05D4B5]/20 hover:scale-[1.02] active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-4.5 bg-[#05D4B5] hover:bg-[#032026] text-[#032026] hover:text-white font-extrabold text-xs uppercase tracking-[0.15em] transition-all duration-300 rounded-full shadow-xl shadow-[#05D4B5]/20 hover:scale-[1.02] active:scale-95 cursor-pointer"
                 >
                   {customerType === "B2C" ? "Rent bedding set" : "Request quotation proposal"}
                 </button>
               </div>
             </div>
-
           </div>
         )}
 
@@ -1675,8 +1670,8 @@ export default function ShopPage() {
                         <strong className="text-[#032026] font-bold">{selectedDuration}</strong>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[#032026]/40 font-bold uppercase tracking-wider block">Payment Model</span>
-                        <strong className="text-[#05D4B5] font-bold uppercase">{planType}</strong>
+                        <span className="text-[10px] text-[#032026]/40 font-bold uppercase tracking-wider block">Sheets / Month</span>
+                        <strong className="text-[#05D4B5] font-bold uppercase">{selectedSheets} Bed Sheet{selectedSheets > 1 ? 's' : ''}</strong>
                       </div>
                     </div>
                   </div>

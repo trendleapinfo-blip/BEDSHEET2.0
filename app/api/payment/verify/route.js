@@ -114,7 +114,9 @@ export async function POST(request) {
     const doubleDeposit = settings?.doubleBedDeposit ?? 800;
     
     const isSingleBed = (bedType || "").toLowerCase().includes("single");
-    const baseDeposit = isSingleBed ? singleDeposit : doubleDeposit;
+    const baseDeposit = securityDeposit !== undefined && !isNaN(Number(securityDeposit))
+      ? Number(securityDeposit)
+      : (isSingleBed ? singleDeposit : doubleDeposit);
 
     let depositMultiplier = 1;
     if (paymentStyleId) {
@@ -141,7 +143,10 @@ export async function POST(request) {
     const computedTotalPrice = discountedBase + computedGst + computedDeposit;
 
     // Fetch Razorpay Order and Payment details directly from Razorpay API to prevent amount tampering
-    const key_id = process.env.RAZORPAY_KEY_ID || "rzp_live_SEHTPEZotHKWW1";
+    const key_id = process.env.RAZORPAY_KEY_ID;
+    if (!key_id) {
+      return NextResponse.json({ error: "Razorpay Key ID configuration is missing on the server." }, { status: 500 });
+    }
     const razorpay = new Razorpay({ key_id, key_secret });
 
     let rzpOrder = null;
@@ -180,14 +185,15 @@ export async function POST(request) {
     if (orderType === "BUY") {
       endDate = null;
     } else {
-      if (duration === "1 Month") {
-        endDate.setMonth(endDate.getMonth() + 1);
-      } else if (duration === "3 Months") {
+      const durLower = (duration || "").toLowerCase();
+      if (durLower.includes("3 month") || durLower.includes("quarterly")) {
         endDate.setMonth(endDate.getMonth() + 3);
-      } else if (duration === "6 Months") {
+      } else if (durLower.includes("6 month")) {
         endDate.setMonth(endDate.getMonth() + 6);
-      } else if (duration === "12 Months") {
-        endDate.setMonth(endDate.getMonth() + 12);
+      } else if (durLower.includes("9 month")) {
+        endDate.setMonth(endDate.getMonth() + 9);
+      } else if (durLower.includes("12 month") || durLower.includes("yearly") || durLower.includes("annual")) {
+        endDate.setFullYear(endDate.getFullYear() + 1);
       } else {
         endDate.setMonth(endDate.getMonth() + 1);
       }

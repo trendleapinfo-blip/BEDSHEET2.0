@@ -22,6 +22,16 @@ import {
   RotateCcw
 } from "lucide-react";
 
+const formatDate = (dateVal) => {
+  if (!dateVal) return "—";
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export default function LogisticsDashboard() {
   const [sessionUser, setSessionUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -497,7 +507,7 @@ export default function LogisticsDashboard() {
                         
                         <div className="flex items-center gap-1.5 text-3xs text-charcoal-ink/40 font-bold uppercase tracking-widest">
                           <Calendar className="h-3.5 w-3.5 text-charcoal-ink/30" />
-                          <span>Start: {shipment.startDate ? new Date(shipment.startDate).toLocaleDateString() : "—"}</span>
+                          <span>Start: {shipment.startDate ? formatDate(shipment.startDate) : "—"}</span>
                         </div>
                       </div>
 

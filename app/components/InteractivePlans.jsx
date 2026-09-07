@@ -45,16 +45,16 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
   const [orderType, setOrderType] = useState("RENT"); // 'RENT' | 'BUY'
   const [buySize, setBuySize] = useState("single"); // 'single' | 'double'
   const [buyColor, setBuyColor] = useState("Classic White");
-  const [rentTier, setRentTier] = useState("BASIC"); // 'BASIC' | 'PREMIUM'
 
-  const [selectedSuite, setSelectedSuite] = useState("residence"); // 'atelier' | 'residence' | 'maison' | 'corporate' | 'custom'
-  const [selectedDuration, setSelectedDuration] = useState("6 Months"); // '1 Month' | '3 Months' | '6 Months' | '12 Months'
+  const [selectedSuite, setSelectedSuite] = useState("atelier"); // 'atelier' (Single) | 'residence' (Double) | 'corporate' | 'custom'
+  const [selectedSheets, setSelectedSheets] = useState(1); // 1 | 2 | 4 sheets per month
+  const [selectedDuration, setSelectedDuration] = useState("1 Month");
   const [customBedType, setCustomBedType] = useState("single");
   const [customColor, setCustomColor] = useState("Classic White");
   const [customFabric, setCustomFabric] = useState("400 TC Organic Cotton");
   const [customPrint, setCustomPrint] = useState("Solid / Minimalist");
 
-  const [dbPlans, setDbPlans] = useState(null);
+  const [dbPlansList, setDbPlansList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -63,53 +63,8 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
         const res = await fetch("/api/plans");
         if (res.ok) {
           const data = await res.json();
-          if (data.success && data.plans && data.plans.length > 0) {
-            // Group and sort API data to match our schema structure
-            const grouped = {
-              single: {
-                title: "Single Bed Plan",
-                subtitle: "For one person sleeping alone. Always clean.",
-                basePrice: 300,
-                image: "/hero_bedding.png",
-                cottonType: "Very Soft Clean Cotton",
-                frequency: "Fresh Sheets Every 2 Weeks",
-                durations: []
-              },
-              double: {
-                title: "Double Bed Plan",
-                subtitle: "For two people or bigger beds. Includes 4 bedsheets + 8 pillow covers.",
-                basePrice: 800,
-                image: "/about_bedding.png",
-                cottonType: "Super Soft Egyptian Cotton",
-                frequency: "Fresh Sheets Every 2 Weeks",
-                durations: []
-              }
-            };
-
-            data.plans.forEach(plan => {
-              const bedTypeLower = (plan.bedType || "").toLowerCase();
-              const isSingleType = bedTypeLower.includes("single") || bedTypeLower.includes("6x3");
-              const bedType = isSingleType ? "single" : "double";
-              
-              grouped[bedType].durations.push({
-                name: plan.name,
-                duration: plan.duration,
-                price: String(plan.price),
-                originalPrice: plan.originalPrice ? String(plan.originalPrice) : null,
-                discount: plan.discount,
-                features: plan.features || [],
-                cta: plan.cta || `Reserve ${plan.name}`,
-                popular: !!plan.popular,
-                badge: plan.badge
-              });
-            });
-
-            grouped.single.durations.sort((a, b) => Number(a.price) - Number(b.price));
-            grouped.double.durations.sort((a, b) => Number(a.price) - Number(b.price));
-
-            if (grouped.single.durations.length > 0 || grouped.double.durations.length > 0) {
-              setDbPlans(grouped);
-            }
+          if (data.success && data.plans) {
+            setDbPlansList(data.plans);
           }
         }
       } catch (err) {
@@ -129,20 +84,31 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
     );
   }
 
-  if (!dbPlans) {
-    return (
-      <div className="text-center py-20 border border-charcoal-ink/10 rounded-[32px] bg-white p-8 max-w-2xl mx-auto shadow-sm">
-        <h3 className="font-serif font-bold text-charcoal-ink text-xl mb-2">No active plans available</h3>
-        <p className="text-charcoal-ink/65 text-xs leading-relaxed">
-          Our bedding pricing plans are currently being updated by our system administrators. Please check back soon or configure plans in the admin panel.
-        </p>
-      </div>
+  // Helper to find specific plan by bedType and sheetsPerMonth
+  const getActivePlan = (bedType, sheets) => {
+    const isSingle = bedType === "single" || bedType === "atelier";
+    const targetBed = isSingle ? "single" : "double";
+    
+    const matched = dbPlansList.find(
+      p => (p.bedTypeRaw === targetBed || (p.bedType && p.bedType.toLowerCase().includes(targetBed))) &&
+           (p.sheetsPerMonth === sheets)
     );
-  }
 
-  const activePlans = dbPlans;
+    if (matched) return matched;
 
-  // Resolve the dynamic selected plan based on Suite and Duration
+    // Fallback defaults matching requested pricing
+    if (isSingle) {
+      if (sheets === 2) return { name: "2 Bed Sheets / Month", price: 200, securityDeposit: 350, sheetsPerMonth: 2, bedTypeRaw: "single" };
+      if (sheets === 4) return { name: "4 Bed Sheets / Month", price: 800, securityDeposit: 800, sheetsPerMonth: 4, bedTypeRaw: "single" };
+      return { name: "1 Bed Sheet / Month", price: 100, securityDeposit: 200, sheetsPerMonth: 1, bedTypeRaw: "single" };
+    } else {
+      if (sheets === 2) return { name: "2 Bed Sheets / Month", price: 400, securityDeposit: 650, sheetsPerMonth: 2, bedTypeRaw: "double" };
+      if (sheets === 4) return { name: "4 Bed Sheets / Month", price: 800, securityDeposit: 800, sheetsPerMonth: 4, bedTypeRaw: "double" };
+      return { name: "1 Bed Sheet / Month", price: 200, securityDeposit: 400, sheetsPerMonth: 1, bedTypeRaw: "double" };
+    }
+  };
+
+  // Resolve the dynamic selected plan based on Suite and Sheets count
   const getSelectedPlanData = () => {
     if (orderType === "BUY") {
       const baseBuyPrice = buySize === "single" ? 200 : 350;
@@ -152,8 +118,7 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
         bedType: buySize,
         planName: `${buySize === "single" ? "Single Bed" : "Double Bed"} Sheets (Purchase)`,
         price: baseBuyPrice,
-        originalPrice: null,
-        discount: null,
+        securityDeposit: 0,
         duration: "One-Time Purchase",
         title: `${buySize === "single" ? "Single Bed Set" : "Double Bed Set"}`,
         subtitle: `Buy and own permanently. No swap cycles or security deposits.`,
@@ -171,6 +136,7 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
         name: "Business Plan",
         subtitle: "For hotels, Airbnbs, or shared rooms.",
         price: "Custom Quote",
+        securityDeposit: 0,
         duration: "Custom Schedule",
         cottonType: "Strong Business Cotton",
         frequency: "Flexible Deliveries",
@@ -178,98 +144,36 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
       };
     }
 
-    if (selectedSuite === "custom") {
-      const pKey = customBedType === "single" ? "single" : "double";
-      const suite = activePlans[pKey];
-      const durationPlan = suite.durations.find(d => d.duration === selectedDuration) || suite.durations[0];
+    const bedKey = selectedSuite === "atelier" ? "single" : "double";
+    const currentActivePlan = getActivePlan(bedKey, selectedSheets);
 
-      const basePlanPrice = Number(durationPlan.price) || 0;
+    const activePrice = currentActivePlan.price !== undefined && currentActivePlan.price !== null
+      ? Number(currentActivePlan.price)
+      : Number(currentActivePlan.monthlyRate || 0);
 
-      // Customization fee: Flat ₹50/mo for Single, ₹0/mo for Double (as per handwritten note)
-      const extraPerMonth = customBedType === "single" ? 50 : 0;
-
-      let multiplier = 1;
-      let discountRate = 0;
-      if (selectedDuration === "3 Months") {
-        multiplier = 3;
-        discountRate = 0.05;
-      } else if (selectedDuration === "6 Months") {
-        multiplier = 6;
-        discountRate = 0.10;
-      } else if (selectedDuration === "12 Months") {
-        multiplier = 12;
-        discountRate = 0.20;
-      }
-
-      const rawExtra = extraPerMonth * multiplier;
-      const discountedExtra = Math.round(rawExtra * (1 - discountRate));
-      const totalPrice = basePlanPrice + discountedExtra;
-
-      return {
-        bedType: customBedType,
-        planName: `Custom Plan (${customColor}, ${customFabric}, ${customPrint})`,
-        price: totalPrice,
-        originalPrice: durationPlan.originalPrice ? (Number(durationPlan.originalPrice) + rawExtra) : null,
-        discount: durationPlan.discount,
-        duration: selectedDuration,
-        title: "Your Custom Bed Sheets",
-        subtitle: `Custom sheets made for your ${customBedType === "single" ? "Single Bed Plan" : "Double Bed Plan"}.`,
-        cottonType: customFabric,
-        frequency: "Fresh Sheets Every 2 Weeks",
-        image: customBedType === "single" ? "/hero_bedding.png" : "/about_bedding.png",
-        cta: "Order Your Custom Sheets",
-        isCustom: true,
-        basePlanPrice,
-        color: customColor,
-        fabric: customFabric,
-        print: customPrint
-      };
-    }
-
-    const bedTypeKey = selectedSuite === "atelier" ? "single" : "double";
-    const suite = activePlans[bedTypeKey];
-
-    const monthlyBase = rentTier === "PREMIUM"
-      ? (bedTypeKey === "single" ? 1200 : 2000)
-      : (bedTypeKey === "single" ? 300 : 800);
-
-    let multiplier = 1;
-    let discountStr = null;
-    let discountRate = 0;
-    if (selectedDuration === "3 Months") {
-      multiplier = 3;
-      discountStr = "5% off";
-      discountRate = 0.05;
-    } else if (selectedDuration === "6 Months") {
-      multiplier = 6;
-      discountStr = "10% off";
-      discountRate = 0.10;
-    } else if (selectedDuration === "12 Months") {
-      multiplier = 12;
-      discountStr = "20% off";
-      discountRate = 0.20;
-    }
-
-    const computedPrice = Math.round(monthlyBase * multiplier * (1 - discountRate));
-    const computedOriginalPrice = discountRate > 0 ? (monthlyBase * multiplier) : null;
+    const activeDeposit = currentActivePlan.depositAmount !== undefined && currentActivePlan.depositAmount !== null
+      ? Number(currentActivePlan.depositAmount)
+      : (currentActivePlan.securityDeposit !== undefined && currentActivePlan.securityDeposit !== null
+        ? Number(currentActivePlan.securityDeposit)
+        : 0);
 
     return {
-      bedType: bedTypeKey,
-      planName: `${bedTypeKey === "single" ? "Single Bed" : "Double Bed"} ${rentTier === "PREMIUM" ? "Premium Rent" : "Basic Rent"} (${selectedDuration})`,
-      price: computedPrice,
-      originalPrice: computedOriginalPrice,
-      discount: discountStr,
-      duration: selectedDuration,
-      title: suite.title,
-      subtitle: rentTier === "PREMIUM"
-        ? "Premium weekly change service. No security deposit, every week they change sheets."
-        : suite.subtitle,
-      cottonType: rentTier === "PREMIUM" ? "600 TC Premium Egyptian Cotton" : suite.cottonType,
-      frequency: rentTier === "PREMIUM" ? "Fresh Sheets Swapped Weekly" : suite.frequency,
-      image: suite.image,
-      cta: `Choose ${rentTier === "PREMIUM" ? "Premium" : "Basic"} Plan`,
-      itemTier: rentTier,
-      orderType: "RENT"
+      bedType: bedKey,
+      planName: currentActivePlan.name,
+      price: activePrice,
+      securityDeposit: activeDeposit,
+      totalPrice: activePrice + activeDeposit,
+      duration: "1 Month",
+      sheetsPerMonth: currentActivePlan.sheetsPerMonth,
+      title: bedKey === "single" ? "Single Bed Subscription" : "Double Bed Subscription",
+      subtitle: bedKey === "single" ? "Sanitized single bedsheets delivered on autopilot." : "Sanitized double bedsheets delivered on autopilot.",
+      cottonType: "100% Super Soft Clean Cotton",
+      frequency: `${currentActivePlan.sheetsPerMonth} Clean Bedsheet Swap${currentActivePlan.sheetsPerMonth > 1 ? 's' : ''} per Month`,
+      image: bedKey === "single" ? "/hero_bedding.png" : "/about_bedding.png",
+      cta: `Select ${currentActivePlan.name}`,
+      itemTier: "BASIC",
+      orderType: "RENT",
+      features: currentActivePlan.features || []
     };
   };
 
@@ -283,6 +187,7 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
         bedType: currentPlan.bedType,
         planName: currentPlan.planName,
         price: currentPlan.price,
+        securityDeposit: 0,
         duration: currentPlan.duration,
         color: currentPlan.color,
         isCustom: false
@@ -301,31 +206,19 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
       return;
     }
 
-    if (selectedSuite === "custom") {
-      handleSelectPlan({
-        orderType: "RENT",
-        bedType: currentPlan.bedType,
-        planName: currentPlan.planName,
-        price: currentPlan.price,
-        basePlanPrice: currentPlan.basePlanPrice,
-        duration: currentPlan.duration,
-        isCustom: true,
-        color: currentPlan.color,
-        fabric: currentPlan.fabric,
-        print: currentPlan.print
-      });
-      return;
-    }
-
     handleSelectPlan({
       orderType: "RENT",
-      itemTier: currentPlan.itemTier || "BASIC",
+      itemTier: "BASIC",
       bedType: currentPlan.bedType,
       planName: currentPlan.planName,
+      sheetsPerMonth: currentPlan.sheetsPerMonth,
       price: currentPlan.price,
-      duration: currentPlan.duration
+      securityDeposit: currentPlan.securityDeposit,
+      totalPrice: currentPlan.totalPrice,
+      duration: "1 Month"
     });
   };
+
 
   return (
     <div className="max-w-7xl mx-auto px-6 sm:px-8 space-y-16 font-sans">
@@ -765,50 +658,58 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
                 </p>
               </div>
 
-              {/* Rental Service Tier Selector (Only for Non-Corporate Rent) */}
+              {/* Plan Options Selector (1 Sheet / 2 Sheets / 4 Sheets per Month) */}
               {selectedSuite !== "corporate" && (
-                <div className="space-y-3 border-b border-charcoal-ink/08 pb-6">
+                <div className="space-y-4 border-b border-charcoal-ink/08 pb-6">
                   <span className="text-3xs uppercase tracking-widest text-charcoal-ink/40 font-bold block">
-                    Choose Rental Service Tier
+                    Choose Your Bedsheet Plan ({selectedSuite === "atelier" ? "Single Bed" : "Double Bed"})
                   </span>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      onClick={() => setRentTier("BASIC")}
-                      className={`p-4 border text-left flex flex-col justify-between h-28 transition-all cursor-pointer rounded-none ${
-                        rentTier === "BASIC"
-                          ? "border-charcoal-ink bg-charcoal-ink/05 ring-1 ring-charcoal-ink"
-                          : "border-charcoal-ink/08 bg-white hover:border-charcoal-ink/20"
-                      }`}
-                    >
-                      <div>
-                        <span className="text-xs font-black uppercase tracking-wider block">Basic Rent</span>
-                        <span className="text-[10px] text-charcoal-ink/65 mt-1 block leading-normal">
-                          Monthly self-swap. Requires ₹{selectedSuite === "atelier" ? 500 : 800} refundable deposit.
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold text-linen-gold mt-2 block">
-                        {selectedSuite === "atelier" ? "₹300 / Month" : "₹800 / Month"}
-                      </span>
-                    </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {[
+                      { sheets: 1, label: "1 Bed Sheet", desc: "1 clean sheet swap per month" },
+                      { sheets: 2, label: "2 Bed Sheets", desc: "2 clean sheet swaps per month" },
+                      { sheets: 4, label: "4 Bed Sheets", desc: "4 clean sheet swaps per month", popular: true }
+                    ].map((opt) => {
+                      const p = getActivePlan(selectedSuite === "atelier" ? "single" : "double", opt.sheets);
+                      const isSelected = selectedSheets === opt.sheets;
 
-                    <button
-                      onClick={() => setRentTier("PREMIUM")}
-                      className={`p-4 border text-left flex flex-col justify-between h-28 transition-all cursor-pointer rounded-none ${
-                        rentTier === "PREMIUM"
-                          ? "border-charcoal-ink bg-charcoal-ink/05 ring-1 ring-charcoal-ink"
-                          : "border-charcoal-ink/08 bg-white hover:border-charcoal-ink/20"
-                      }`}
-                    >
-                      <div>
-                        <span className="text-xs font-black uppercase tracking-wider block">Premium Rent</span>
-                        <span className="text-[10px] text-charcoal-ink/65 mt-1 block leading-normal">
-                          Weekly change service by staff. No security deposit.
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold text-linen-gold mt-2 block">
-                        {selectedSuite === "atelier" ? "₹1,200 / Month" : "₹2,000 / Month"}
-                      </span>
-                    </button>
+                      return (
+                        <button
+                          key={opt.sheets}
+                          onClick={() => setSelectedSheets(opt.sheets)}
+                          className={`p-4 border text-left flex flex-col justify-between transition-all cursor-pointer relative ${
+                            isSelected
+                              ? "border-charcoal-ink bg-charcoal-ink/05 ring-2 ring-charcoal-ink shadow-md"
+                              : "border-charcoal-ink/10 bg-white hover:border-charcoal-ink/30"
+                          }`}
+                        >
+                          {opt.popular && (
+                            <span className="absolute -top-2.5 right-3 bg-linen-gold text-white text-[8px] font-black uppercase px-2 py-0.5 tracking-wider shadow-sm">
+                              Best Value
+                            </span>
+                          )}
+                          <div className="space-y-1">
+                            <span className="text-xs font-black text-charcoal-ink uppercase tracking-wider block">
+                              {opt.sheets} Sheet{opt.sheets > 1 ? "s" : ""} / Mo
+                            </span>
+                            <span className="text-[10px] text-charcoal-ink/60 font-medium block">
+                              {opt.desc}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-charcoal-ink/10 space-y-1">
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[10px] text-charcoal-ink/50 uppercase font-bold">MRP:</span>
+                              <span className="text-sm font-extrabold text-charcoal-ink">₹{p.price || p.monthlyRate}/mo</span>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[10px] text-teal-650 uppercase font-bold">Deposit:</span>
+                              <span className="text-xs font-bold text-teal-650">₹{p.depositAmount !== undefined && p.depositAmount !== null ? p.depositAmount : (p.securityDeposit !== undefined ? p.securityDeposit : 0)}</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -820,73 +721,27 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
                   <p className="font-bold text-charcoal-ink">{currentPlan.cottonType}</p>
                 </div>
                 <div className="space-y-1">
-                  <span className="text-3xs uppercase tracking-widest text-charcoal-ink/40 font-bold block">How Often We Change</span>
+                  <span className="text-3xs uppercase tracking-widest text-charcoal-ink/40 font-bold block">Included Swaps</span>
                   <p className="font-bold text-charcoal-ink">{currentPlan.frequency}</p>
                 </div>
               </div>
-
-              {/* Duration Toggles (Only for Non-Corporate Rent) */}
-              {selectedSuite !== "corporate" && (
-                <div className="space-y-4">
-                  <span className="text-3xs uppercase tracking-widest text-charcoal-ink/40 font-bold block">
-                    Choose Duration
-                  </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {["1 Month", "3 Months", "6 Months", "12 Months"].map((duration) => {
-                      const pKey = selectedSuite === "atelier" ? "single" : "double";
-                      
-                      const monthlyBase = rentTier === "PREMIUM"
-                        ? (pKey === "single" ? 1200 : 2000)
-                        : (pKey === "single" ? 300 : 800);
-                      
-                      let multiplier = 1;
-                      let discountRate = 0;
-                      let discountStr = null;
-                      if (duration === "3 Months") { multiplier = 3; discountRate = 0.05; discountStr = "5% off"; }
-                      else if (duration === "6 Months") { multiplier = 6; discountRate = 0.10; discountStr = "10% off"; }
-                      else if (duration === "12 Months") { multiplier = 12; discountRate = 0.20; discountStr = "20% off"; }
-
-                      const displayPrice = Math.round(monthlyBase * multiplier * (1 - discountRate));
-
-                      return (
-                        <button
-                          key={duration}
-                          onClick={() => setSelectedDuration(duration)}
-                          className={`py-3 px-4 border text-center transition-all cursor-pointer rounded-none ${
-                            selectedDuration === duration
-                              ? "bg-charcoal-ink text-alabaster-linen border-charcoal-ink"
-                              : "bg-alabaster-linen text-charcoal-ink border-charcoal-ink/05 hover:border-charcoal-ink/20"
-                          }`}
-                        >
-                          <span className="text-2xs font-bold uppercase tracking-wider block">{duration}</span>
-                          <span className="text-3xs opacity-80 block mt-0.5">₹{displayPrice}</span>
-                          {discountStr && (
-                            <span className="text-[8px] font-extrabold text-linen-gold block mt-0.5 uppercase tracking-tight">
-                              {discountStr}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </>
+
           )}
 
           {/* Pricing Panel */}
           <div className="bg-alabaster-linen p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="text-center sm:text-left">
+            <div className="text-center sm:text-left space-y-1">
               <span className="text-3xs uppercase tracking-widest text-charcoal-ink/40 font-bold block">
-                {orderType === "BUY" ? "Base Price" : "Price"}
+                {orderType === "BUY" ? "Total Price" : "Plan Breakdown"}
               </span>
-              <div className="flex items-baseline justify-center sm:justify-start gap-2 mt-1">
+              <div className="flex items-baseline justify-center sm:justify-start gap-2">
                 <span className="text-2xl font-bold font-serif text-charcoal-ink">
                   {orderType === "RENT" && selectedSuite === "corporate" ? "Custom Quote" : `₹${currentPlan.price}`}
                 </span>
                 {orderType === "RENT" && selectedSuite !== "corporate" && (
                   <span className="text-3xs text-charcoal-ink/50 uppercase tracking-widest font-bold">
-                    / {currentPlan.duration}
+                    / Month (MRP)
                   </span>
                 )}
                 {orderType === "BUY" && (
@@ -895,12 +750,13 @@ export default function InteractivePlans({ handleSelectPlan, submittingPlan }) {
                   </span>
                 )}
               </div>
-              {orderType === "RENT" && selectedSuite !== "corporate" && currentPlan.originalPrice && (
-                <p className="text-[10px] text-charcoal-ink/40 mt-1">
-                  Instead of <span className="line-through">₹{currentPlan.originalPrice}</span> ({currentPlan.discount} savings applied)
+              {orderType === "RENT" && selectedSuite !== "corporate" && (
+                <p className="text-[11px] text-teal-650 font-bold">
+                  + ₹{currentPlan.securityDeposit} Refundable Deposit (Initial Total: ₹{currentPlan.totalPrice})
                 </p>
               )}
             </div>
+
 
             <button
               onClick={handleReserve}
