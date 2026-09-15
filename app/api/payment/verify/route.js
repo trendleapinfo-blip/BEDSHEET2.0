@@ -139,8 +139,8 @@ export async function POST(request) {
 
     const computedDeposit = (orderType === "BUY" || subscriptionType === "weekly" || alreadyPaidDeposit) ? 0 : Math.round(baseDeposit * depositMultiplier);
     const discountedBase = Number(price) - calculatedDiscount;
-    const computedGst = Math.round(discountedBase * 0.18);
-    const computedTotalPrice = discountedBase + computedGst + computedDeposit;
+    const computedGst = Number((discountedBase - (discountedBase / 1.18)).toFixed(2));
+    const computedTotalPrice = discountedBase + computedDeposit;
 
     // Fetch Razorpay Order and Payment details directly from Razorpay API to prevent amount tampering
     const key_id = process.env.RAZORPAY_KEY_ID;

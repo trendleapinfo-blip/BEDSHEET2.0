@@ -286,7 +286,7 @@ export default function Home() {
               </h1>
 
               <div className="text-lg sm:text-3xl font-bold text-[#05D4B5] tracking-wide">
-                At just <span className="text-white font-black text-2xl sm:text-4xl">₹10</span>/day
+                At just <span className="text-white font-black text-2xl sm:text-4xl">₹100</span>/month
               </div>
 
               <div className="inline-block mt-1 sm:mt-2">

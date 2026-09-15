@@ -93,9 +93,9 @@ export async function GET(request) {
       { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
-    // Redirect to onboarding if new or missing mobile, else to dashboard
+    // Redirect to onboarding if new or missing mobile, else to shop
     const redirectUrl = new URL(
-      isNewUser || !user.mobile ? "/onboarding" : "/dashboard",
+      isNewUser || !user.mobile ? "/onboarding" : "/shop",
       request.url
     );
     const response = NextResponse.redirect(redirectUrl);

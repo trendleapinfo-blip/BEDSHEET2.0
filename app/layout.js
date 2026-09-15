@@ -1,6 +1,7 @@
 import { Cormorant_Garamond, Plus_Jakarta_Sans, Geist_Mono, Outfit } from "next/font/google";
 import "./globals.css";
 import Chatbot from "./components/Chatbot";
+import ScrollToTop from "./components/ScrollToTop";
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import AnalyticsTracker from "./components/AnalyticsTracker";
@@ -34,11 +35,11 @@ export const metadata = {
     default: "ClosetRush | Premium Bedding & Linen Rental Service",
     template: "%s | ClosetRush"
   },
-  description: "Rent clean bed sheets at just ₹10 per day. Clean, fresh organic bedsheets and pillow covers delivered to your doorstep. Free delivery, pause or cancel anytime.",
+  description: "Rent clean bed sheets at just ₹100 per month. Clean, fresh organic bedsheets and pillow covers delivered to your doorstep. Free delivery, pause or cancel anytime.",
   keywords: ["clean bedding", "bedsheet rental", "hygienic bedsheets", "prevent bedsheet acne", "dust mite allergy bedding", "sleep hygiene", "hostel bedding", "closetrush", "rent bedsheets", "rent bedsheets bangalore", "bedding rental"],
   openGraph: {
     title: "ClosetRush | Premium Bedding & Linen Rental Service",
-    description: "Rent clean bed sheets at just ₹10 per day. Free delivery, pause or cancel anytime.",
+    description: "Rent clean bed sheets at just ₹100 per month. Free delivery, pause or cancel anytime.",
     url: "https://www.closetrush.in",
     siteName: "ClosetRush",
     images: [
@@ -55,7 +56,7 @@ export const metadata = {
   twitter: {
     card: "summary_large_image",
     title: "ClosetRush | Premium Bedding & Linen Rental Service",
-    description: "Rent clean bed sheets at just ₹10 per day. Free delivery, pause or cancel anytime.",
+    description: "Rent clean bed sheets at just ₹100 per month. Free delivery, pause or cancel anytime.",
     images: ["/logo.png"],
   },
   robots: {
@@ -127,6 +128,7 @@ export default function RootLayout({ children }) {
             `,
           }}
         />
+        <ScrollToTop />
         {children}
         <Chatbot />
         <Analytics />

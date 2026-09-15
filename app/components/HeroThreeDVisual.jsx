@@ -178,10 +178,10 @@ export default function HeroThreeDVisual() {
           AS LOW AS
         </span>
         <span className="text-lg sm:text-3.5xl font-black text-[#05D4B5] font-serif leading-none py-0.5 sm:py-1">
-          ₹10
+          ₹100
         </span>
         <span className="text-[6.5px] sm:text-[8px] font-black text-[#032026]/60 uppercase tracking-widest leading-none">
-          /DAY
+          /MONTH
         </span>
 
         {/* Decorative sunburst rays at top right */}

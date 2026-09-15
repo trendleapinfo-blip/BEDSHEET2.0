@@ -392,26 +392,20 @@ function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const oauthError = searchParams.get("error");
+  const oauthMsgs = {
+    oauth_denied: "Google authentication was denied.",
+    email_not_provided: "Email was not provided by Google.",
+    token_exchange_failed: "Failed to connect with Google.",
+  };
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(oauthError ? (oauthMsgs[oauthError] || "Google sign-in failed. Please try again.") : "");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Handle OAuth errors
-  useEffect(() => {
-    const oauthError = searchParams.get("error");
-    if (oauthError) {
-      const msgs = {
-        oauth_denied: "Google authentication was denied.",
-        email_not_provided: "Email was not provided by Google.",
-        token_exchange_failed: "Failed to connect with Google.",
-      };
-      setError(msgs[oauthError] || "Google sign-in failed. Please try again.");
-    }
-  }, [searchParams]);
 
   // Store pending checkout
   useEffect(() => {
@@ -430,10 +424,11 @@ function LoginFormContent() {
     setTimeout(() => {
       const redirect = searchParams.get("redirect");
       if (redirect === "pricing" || redirect === "checkout") return router.push("/checkout");
+      if (redirect) return router.push(redirect.startsWith("/") ? redirect : `/${redirect}`);
       if (user?.role === "admin") return router.push("/admin");
       if (user?.role === "warehouse") return router.push("/warehouse");
       if (user?.role === "logistics") return router.push("/logistics");
-      router.push("/dashboard");
+      router.push("/shop");
       router.refresh();
     }, 1400);
   };

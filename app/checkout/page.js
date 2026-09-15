@@ -126,6 +126,13 @@ function CheckoutFormContent() {
     fetchSessionAndPlan();
   }, []);
 
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+    setCouponSuccess("");
+  };
+
   // Reset coupon when delivery option changes
   useEffect(() => {
     setAppliedCoupon(null);
@@ -176,14 +183,15 @@ function CheckoutFormContent() {
         } else {
           couponDiscount = appliedCoupon.discountValue;
         }
-        if (couponDiscount > base) {
-          couponDiscount = base;
+        if (couponDiscount >= base) {
+          couponDiscount = Math.max(0, base - 1);
         }
       }
       const discountedBase = base - couponDiscount;
-      const gst = Math.round(discountedBase * 0.18);
-      const total = discountedBase + gst;
-      return { base, couponDiscount, discountedBase, gst, deposit: 0, total };
+      const taxableBase = Number((discountedBase / 1.18).toFixed(2));
+      const gst = Number((discountedBase - taxableBase).toFixed(2));
+      const total = discountedBase;
+      return { base, couponDiscount, discountedBase, taxableBase, gst, deposit: 0, total };
     }
 
     // New Pricing Logic for RENT
@@ -232,16 +240,17 @@ function CheckoutFormContent() {
       } else {
         couponDiscount = appliedCoupon.discountValue;
       }
-      if (couponDiscount > base) {
-        couponDiscount = base;
+      if (couponDiscount >= base) {
+        couponDiscount = Math.max(0, base - 1);
       }
     }
 
     const discountedBase = base - couponDiscount;
-    const gst = Math.round(discountedBase * 0.18);
-    const total = discountedBase + gst + deposit;
+    const taxableBase = Number((discountedBase / 1.18).toFixed(2));
+    const gst = Number((discountedBase - taxableBase).toFixed(2));
+    const total = discountedBase + deposit;
 
-    return { base, couponDiscount, discountedBase, gst, deposit, total, durationMonths };
+    return { base, couponDiscount, discountedBase, taxableBase, gst, deposit, total, durationMonths };
   };
 
   const pricing = getPricing();
@@ -651,21 +660,35 @@ function CheckoutFormContent() {
                   type="text"
                   value={couponCode}
                   onChange={(e) => {
-                    setCouponCode(e.target.value);
+                    const val = e.target.value;
+                    setCouponCode(val);
                     setCouponError("");
                     setCouponSuccess("");
+                    if (!val.trim()) {
+                      setAppliedCoupon(null);
+                    }
                   }}
                   placeholder="Enter code (e.g. FRESHBED10)"
                   className="flex-1 px-4 py-3 bg-white border border-charcoal-ink/15 rounded-none text-charcoal-ink focus:outline-none focus:border-linen-gold text-xs font-bold uppercase"
                 />
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  disabled={validatingCoupon || !couponCode.trim()}
-                  className="px-6 py-3 bg-charcoal-ink hover:bg-linen-gold text-white font-bold text-xs uppercase tracking-widest rounded-none transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  {validatingCoupon ? "Validating..." : "Apply"}
-                </button>
+                {appliedCoupon ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-widest rounded-none transition-colors cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={validatingCoupon || !couponCode.trim()}
+                    className="px-6 py-3 bg-charcoal-ink hover:bg-linen-gold text-white font-bold text-xs uppercase tracking-widest rounded-none transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {validatingCoupon ? "Validating..." : "Apply"}
+                  </button>
+                )}
               </div>
               {couponError && (
                 <p className="text-[11px] text-rose-600 font-bold mt-1 flex items-center gap-1">
@@ -752,22 +775,32 @@ function CheckoutFormContent() {
             </div>
 
             <div className="space-y-3 text-2xs font-semibold text-white/70">
-              <div className="flex justify-between">
-                <span>
-                  {plan.orderType === "BUY" ? "Base Purchase Price" : (subscriptionType === "weekly" ? "Weekly Service Rate" : "Standard Kit Rate")}:
-                </span>
-                <span className="text-white">₹{pricing.base}</span>
-              </div>
-
-              {pricing.couponDiscount > 0 && (
-                <div className="flex justify-between font-bold text-linen-gold">
-                  <span>Coupon Code Discount ({appliedCoupon?.couponCode}):</span>
-                  <span>-₹{pricing.couponDiscount}</span>
+              {pricing.couponDiscount > 0 ? (
+                <>
+                  <div className="flex justify-between">
+                    <span>Plan MRP Rate ({plan.duration}):</span>
+                    <span className="text-white">₹{pricing.base}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-linen-gold">
+                    <span>Coupon Code Discount ({appliedCoupon?.couponCode}):</span>
+                    <span>-₹{pricing.couponDiscount}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-white/08 pt-2">
+                    <span>Net Base Amount (Excl. GST):</span>
+                    <span className="text-white">₹{pricing.taxableBase}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between">
+                  <span>
+                    {plan.orderType === "BUY" ? "Base Purchase Amount (Excl. GST)" : (subscriptionType === "weekly" ? "Weekly Base Amount (Excl. GST)" : "Base Rental Amount (Excl. GST)")}:
+                  </span>
+                  <span className="text-white">₹{pricing.taxableBase}</span>
                 </div>
               )}
 
               <div className="flex justify-between">
-                <span>GST Tax (18%):</span>
+                <span>GST (18%):</span>
                 <span className="text-white">₹{pricing.gst}</span>
               </div>
 
@@ -781,9 +814,11 @@ function CheckoutFormContent() {
               )}
 
               <div className="border-t border-white/08 my-4 pt-4 flex justify-between items-baseline">
-                <span className="text-xs font-black text-white uppercase tracking-wider">
-                  {plan.orderType === "BUY" ? "Total Payable Amount:" : "Total Upfront Payable:"}
-                </span>
+                <div>
+                  <span className="text-xs font-black text-white uppercase tracking-wider block">
+                    {plan.orderType === "BUY" ? "Total Payable Amount:" : "Total Upfront Payable:"}
+                  </span>
+                </div>
                 <div className="text-right">
                   <span className="text-2xl font-black text-linen-gold font-serif">
                     ₹{pricing.total}

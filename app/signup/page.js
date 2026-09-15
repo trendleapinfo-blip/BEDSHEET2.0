@@ -138,8 +138,10 @@ function SignupFormContent() {
         const redirect = searchParams.get("redirect");
         if (redirect === "pricing" || redirect === "checkout") {
           router.push("/checkout");
+        } else if (redirect) {
+          router.push(redirect.startsWith("/") ? redirect : `/${redirect}`);
         } else {
-          router.push("/");
+          router.push("/shop");
         }
         router.refresh();
       }, 1500);

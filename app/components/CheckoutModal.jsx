@@ -125,16 +125,17 @@ export default function CheckoutModal({ plan, user, onClose, onConfirm, loading 
       } else {
         couponDiscount = appliedCoupon.discountValue;
       }
-      if (couponDiscount > base) {
-        couponDiscount = base;
+      if (couponDiscount >= base) {
+        couponDiscount = Math.max(0, base - 1);
       }
     }
 
     const discountedBase = base - couponDiscount;
-    const gst = Math.round(discountedBase * 0.18);
-    const total = discountedBase + gst + deposit;
+    const taxableBase = Number((discountedBase / 1.18).toFixed(2));
+    const gst = Number((discountedBase - taxableBase).toFixed(2));
+    const total = discountedBase + deposit;
 
-    return { base, couponDiscount, discountedBase, gst, deposit, total };
+    return { base, couponDiscount, discountedBase, taxableBase, gst, deposit, total };
   };
 
   const pricing = getPricing();
@@ -173,6 +174,13 @@ export default function CheckoutModal({ plan, user, onClose, onConfirm, loading 
     } finally {
       setValidatingCoupon(false);
     }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+    setCouponSuccess("");
   };
 
   // Re-validate or reset coupon when delivery option changes (since subtotal changes)
@@ -425,21 +433,35 @@ export default function CheckoutModal({ plan, user, onClose, onConfirm, loading 
                   type="text"
                   value={couponCode}
                   onChange={(e) => {
-                    setCouponCode(e.target.value);
+                    const val = e.target.value;
+                    setCouponCode(val);
                     setCouponError("");
                     setCouponSuccess("");
+                    if (!val.trim()) {
+                      setAppliedCoupon(null);
+                    }
                   }}
                   placeholder="Enter code (e.g. WELCOME10)"
                   className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:border-[#245c77] text-xs font-bold uppercase"
                 />
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  disabled={validatingCoupon || !couponCode.trim()}
-                  className="px-5 py-2.5 bg-[#245c77] hover:bg-[#245c77]/90 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {validatingCoupon ? "Validating..." : "Apply"}
-                </button>
+                {appliedCoupon ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={validatingCoupon || !couponCode.trim()}
+                    className="px-5 py-2.5 bg-[#245c77] hover:bg-[#245c77]/90 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {validatingCoupon ? "Validating..." : "Apply"}
+                  </button>
+                )}
               </div>
               {couponError && (
                 <p className="text-[11px] text-rose-600 font-bold mt-1 flex items-center gap-1">
@@ -461,24 +483,29 @@ export default function CheckoutModal({ plan, user, onClose, onConfirm, loading 
             </h4>
             
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between font-semibold">
-                <span className="text-slate-400">
-                  {subscriptionType === "weekly" ? "Weekly Service Rate" : "Standard Kit Rate"} ({plan.duration}):
-                </span>
-                <span className="text-slate-700">₹{pricing.base}</span>
-              </div>
-
-              {pricing.couponDiscount > 0 && (
-                <div className="flex justify-between font-bold text-emerald-600">
-                  <span>Coupon Discount ({appliedCoupon?.couponCode}):</span>
-                  <span>-₹{pricing.couponDiscount}</span>
-                </div>
-              )}
-
-              {pricing.couponDiscount > 0 && (
-                <div className="flex justify-between font-semibold border-b border-dashed border-slate-200 pb-2">
-                  <span className="text-slate-400">Discounted Base Rate:</span>
-                  <span className="text-slate-700 font-bold">₹{pricing.discountedBase}</span>
+              {pricing.couponDiscount > 0 ? (
+                <>
+                  <div className="flex justify-between font-semibold">
+                    <span className="text-slate-400">
+                      {subscriptionType === "weekly" ? "Weekly Service Rate" : "Standard Kit Rate"} ({plan.duration}):
+                    </span>
+                    <span className="text-slate-700">₹{pricing.base}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-emerald-600">
+                    <span>Coupon Discount ({appliedCoupon?.couponCode}):</span>
+                    <span>-₹{pricing.couponDiscount}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold border-b border-dashed border-slate-200 pb-2">
+                    <span className="text-slate-400">Net Base Amount (Excl. GST):</span>
+                    <span className="text-slate-700 font-bold">₹{pricing.taxableBase}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between font-semibold">
+                  <span className="text-slate-400">
+                    {subscriptionType === "weekly" ? "Weekly Base Amount (Excl. GST)" : "Base Rental Amount (Excl. GST)"}:
+                  </span>
+                  <span className="text-slate-700">₹{pricing.taxableBase}</span>
                 </div>
               )}
 
@@ -492,9 +519,11 @@ export default function CheckoutModal({ plan, user, onClose, onConfirm, loading 
               </div>
 
               <div className="border-t border-slate-200 my-2 pt-3 flex justify-between items-baseline">
-                <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  Total Upfront Payable:
-                </span>
+                <div>
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider block">
+                    Total Upfront Payable:
+                  </span>
+                </div>
                 <div className="text-right">
                   <span className="text-xl font-black text-[#245c77] font-serif">
                     ₹{pricing.total}

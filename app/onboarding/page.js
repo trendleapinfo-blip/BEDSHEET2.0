@@ -58,7 +58,7 @@ function OnboardingForm() {
             setPincode(data.user.pincode || "");
             // If user already has a mobile, they're complete — skip onboarding
             if (data.user.mobile) {
-              router.replace("/dashboard");
+              router.replace("/shop");
               return;
             }
           } else {
@@ -130,8 +130,8 @@ function OnboardingForm() {
       if (!res.ok) {
         throw new Error(data.error || "Failed to save profile.");
       }
-      setSuccess("Profile saved! Taking you to your dashboard…");
-      setTimeout(() => router.push("/dashboard"), 1500);
+      setSuccess("Profile saved! Taking you to the shop…");
+      setTimeout(() => router.push("/shop"), 1500);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -413,7 +413,7 @@ function OnboardingForm() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
-                Save & Go to Dashboard
+                Save & Go to Shop
               </>
             )}
           </button>

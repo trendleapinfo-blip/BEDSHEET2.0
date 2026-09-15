@@ -116,7 +116,7 @@ export default function Footer({ showWaitlist = true }) {
                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#05D4B5] bg-[#05D4B5]/10 px-2 py-0.5 rounded-full">Active</span>
               </div>
               <p className="text-3xs text-gray-300 font-normal">
-                Gurugram & Noida • Clean Bed Sheets Delivered to Doorstep @ ₹10/day
+                Gurugram & Noida • Clean Bed Sheets Delivered to Doorstep @ ₹100/month
               </p>
             </div>
 
@@ -176,7 +176,7 @@ export default function Footer({ showWaitlist = true }) {
               </span>
             </div>
             <p className="text-3xs text-gray-300 leading-relaxed max-w-xs font-normal">
-              India&apos;s 1st bedsheet rental service. Pure organic luxury linens, 100°C sanitized, delivered at ₹10/day.
+              India&apos;s 1st bedsheet rental service. Pure organic luxury linens, 100°C sanitized, delivered at ₹100/month.
             </p>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#05D4B5]/10 border border-[#05D4B5]/20 rounded-full text-[9px] text-[#05D4B5] font-bold">
               <ShieldCheck className="w-3 h-3" />

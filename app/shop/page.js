@@ -340,12 +340,16 @@ export default function ShopPage() {
       } else {
         couponDiscount = appliedCoupon.discountValue;
       }
+      if (couponDiscount >= subtotal) {
+        couponDiscount = Math.max(0, subtotal - 1);
+      }
     }
 
-    const discountedBase = Math.max(0, subtotal - couponDiscount);
-    const gst = Math.round(discountedBase * 0.18);
+    const discountedBase = Math.max(1, subtotal - couponDiscount);
+    const taxableBase = Number((discountedBase / 1.18).toFixed(2));
+    const gst = Number((discountedBase - taxableBase).toFixed(2));
     const deposit = depositAmt;
-    const total = discountedBase + gst + deposit;
+    const total = discountedBase + deposit;
 
     return {
       baseMRP,
@@ -354,6 +358,7 @@ export default function ShopPage() {
       subtotal,
       couponDiscount,
       discountedBase,
+      taxableBase,
       gst,
       deposit,
       total,
@@ -1215,7 +1220,7 @@ export default function ShopPage() {
                   <div className="bg-[#FCFBF9] p-6 rounded-2xl border border-[#032026]/10 space-y-3.5 text-xs shadow-inner">
                     <div className="flex justify-between items-baseline font-bold text-[#032026] uppercase tracking-widest text-3xs">
                       <div>
-                        <span>Upfront Plan Cost ({b2cPricing.durationMonths} Month{b2cPricing.durationMonths > 1 ? 's' : ''})</span>
+                        <span>Base Plan Cost Excl. GST ({b2cPricing.durationMonths} Month{b2cPricing.durationMonths > 1 ? 's' : ''})</span>
                         {b2cPricing.discountPercent > 0 && (
                           <span className="text-[9px] text-[#05D4B5] block font-normal lowercase tracking-normal font-sans">
                             ₹{b2cPricing.effectiveMonthlyRate}/mo ({b2cPricing.discountPercent}% off)
@@ -1225,11 +1230,21 @@ export default function ShopPage() {
                       <span className="text-xs font-black">
                         {b2cPricing.discountPercent > 0 && (
                           <span className="line-through text-gray-400 font-normal mr-1.5">
-                            ₹{b2cPricing.baseMRP * b2cPricing.durationMonths}
+                            ₹{Number(((b2cPricing.baseMRP * b2cPricing.durationMonths) / 1.18).toFixed(2))}
                           </span>
                         )}
-                        ₹{b2cPricing.subtotal}
+                        ₹{b2cPricing.taxableBase}
                       </span>
+                    </div>
+                    {b2cPricing.couponDiscount > 0 && (
+                      <div className="flex justify-between text-3xs text-[#05D4B5] font-bold uppercase tracking-widest">
+                        <span>Coupon Discount ({appliedCoupon?.couponCode})</span>
+                        <span>- ₹{b2cPricing.couponDiscount}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-3xs text-[#032026]/75 font-bold uppercase tracking-widest">
+                      <span>GST (18%)</span>
+                      <span>₹{b2cPricing.gst}</span>
                     </div>
                     {b2cPricing.deposit > 0 && (
                       <div className="flex justify-between text-3xs text-[#032026]/75 font-bold uppercase tracking-widest">
@@ -1237,10 +1252,6 @@ export default function ShopPage() {
                         <span>+ ₹{b2cPricing.deposit}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-3xs text-[#032026]/40 font-bold uppercase tracking-widest">
-                      <span>GST flat tax (18%)</span>
-                      <span>+ ₹{b2cPricing.gst}</span>
-                    </div>
                     <div className="border-t border-[#032026]/10 pt-4 flex justify-between items-baseline font-black uppercase text-2xs tracking-widest text-[#05D4B5]">
                       <span>Total Checkout Upfront</span>
                       <span className="text-2xl font-black text-[#032026] font-serif">₹{b2cPricing.total}</span>
@@ -1800,8 +1811,8 @@ export default function ShopPage() {
 
                   <div className="space-y-4 text-3xs font-bold uppercase tracking-wider text-white/70">
                     <div className="flex justify-between">
-                      <span>Base Rental Amount:</span>
-                      <span className="text-white">₹{b2cPricing.subtotal}</span>
+                      <span>Base Rental Amount (Excl. GST):</span>
+                      <span className="text-white">₹{b2cPricing.taxableBase}</span>
                     </div>
 
                     {b2cPricing.couponDiscount > 0 && (
@@ -1812,7 +1823,7 @@ export default function ShopPage() {
                     )}
 
                     <div className="flex justify-between">
-                      <span>GST flat tax (18%):</span>
+                      <span>GST (18%):</span>
                       <span className="text-white">₹{b2cPricing.gst}</span>
                     </div>
 

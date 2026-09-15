@@ -138,9 +138,9 @@ export async function POST(request) {
     }));
 
     const discountedBase = Number(price) - calculatedDiscount;
-    const computedGst = Math.round(discountedBase * 0.18);
+    const computedGst = Math.round(discountedBase - (discountedBase / 1.18));
     const computedDeposit = (orderType === "BUY" || subscriptionType === "weekly" || alreadyPaidDeposit) ? 0 : Math.round(baseDeposit * depositMultiplier);
-    const computedTotalPrice = discountedBase + computedGst + computedDeposit;
+    const computedTotalPrice = discountedBase + computedDeposit;
 
     // Calculate End Date based on duration
     let endDate = new Date();

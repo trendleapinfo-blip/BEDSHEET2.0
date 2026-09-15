@@ -152,8 +152,8 @@ export default function Dashboard() {
               subscriptionType: "monthly",
               orderType: activeOrder.orderType || "RENT",
               itemTier: activeOrder.itemTier || "PREMIUM",
-              gst: Math.round((activeOrder.finalPrice || 0) * 0.18),
-              totalPrice: (activeOrder.finalPrice || 0) + Math.round((activeOrder.finalPrice || 0) * 0.18),
+              gst: Math.round((activeOrder.finalPrice || 0) - ((activeOrder.finalPrice || 0) / 1.18)),
+              totalPrice: (activeOrder.finalPrice || 0),
               startDate: activeOrder.startDate || new Date(),
            };
         }

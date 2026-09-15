@@ -120,9 +120,10 @@ export default function ProductDetailPage() {
   const getPricing = () => {
     if (orderType === "BUY") {
       const base = size === "single" ? 200 : 350;
-      const gst = Math.round(base * 0.18);
-      const total = base + gst;
-      return { base, originalPrice: null, discount: 0, deposit: 0, gst, total };
+      const taxableBase = Number((base / 1.18).toFixed(2));
+      const gst = Number((base - taxableBase).toFixed(2));
+      const total = base;
+      return { base, taxableBase, originalPrice: null, discount: 0, deposit: 0, gst, total };
     } else {
       // New Pricing Logic
       let baseMonthly = 0;
@@ -149,10 +150,11 @@ export default function ProductDetailPage() {
       let base = Math.round(originalRent * (1 - discountRate));
       let discount = originalRent - base;
       let deposit = depositAmt;
-      let gst = Math.round(base * 0.18);
-      let total = base + gst + deposit;
+      let taxableBase = Number((base / 1.18).toFixed(2));
+      let gst = Number((base - taxableBase).toFixed(2));
+      let total = base + deposit;
 
-      return { base, originalPrice: discount > 0 ? originalRent : null, discount, deposit, gst, total, durationMonths };
+      return { base, taxableBase, originalPrice: discount > 0 ? originalRent : null, discount, deposit, gst, total, durationMonths };
     }
   };
 
@@ -519,8 +521,12 @@ export default function ProductDetailPage() {
               )}
 
               <div className="flex justify-between text-[10px] text-charcoal-ink/60 font-semibold">
-                <span>GST (18% flat rate)</span>
-                <span>+ ₹{pricing.gst}</span>
+                <span>Base Amount (Excl. GST)</span>
+                <span>₹{pricing.taxableBase}</span>
+              </div>
+              <div className="flex justify-between text-[10px] text-charcoal-ink/60 font-semibold">
+                <span>GST (18%)</span>
+                <span>₹{pricing.gst}</span>
               </div>
 
               {pricing.deposit > 0 && (
