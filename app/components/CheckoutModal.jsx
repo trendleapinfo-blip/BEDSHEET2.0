@@ -163,10 +163,10 @@ export default function CheckoutModal({ plan, user, onClose, onConfirm, loading 
           discountValue: data.discountValue,
           discount: data.discount
         });
-        setCouponSuccess(`Coupon '${data.couponCode}' applied! Discount: ₹${data.discount}`);
+        setCouponSuccess(data.message ? `✓ ${data.message} (Discount: ₹${data.discount})` : `Coupon '${data.couponCode}' applied! Discount: ₹${data.discount}`);
       } else {
         setAppliedCoupon(null);
-        setCouponError(data.error || "Failed to apply coupon.");
+        setCouponError(data.error || "Failed to apply promo code.");
       }
     } catch (err) {
       console.error(err);

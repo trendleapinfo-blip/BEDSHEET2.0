@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { signToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
+import PartnerLink from "@/models/PartnerLink";
 
 export async function GET(request) {
   try {
@@ -77,13 +78,49 @@ export async function GET(request) {
       } else {
         // 3. Register a brand new user — profile incomplete (no mobile)
         isNewUser = true;
+
+        // Check for referral code in cookies
+        const cookieStore = await cookies();
+        const refCode = (cookieStore.get("closerush_ref_code")?.value || "").trim().toUpperCase();
+
+        let partnerLinkId = null;
+        let validRefCode = null;
+
+        if (refCode) {
+          const partner = await PartnerLink.findOne({ code: refCode, status: "ACTIVE" });
+          if (partner) {
+            partnerLinkId = partner._id;
+            validRefCode = partner.code;
+          }
+        }
+
         user = await User.create({
           name: profile.name || "",
           email: profile.email.toLowerCase(),
           googleId: profile.id,
           accountType: "Individual User",
           address: "",
+          referredByCode: validRefCode || undefined,
+          partnerLinkId: partnerLinkId || undefined,
         });
+
+        // Add to partner's signups list
+        if (partnerLinkId) {
+          try {
+            await PartnerLink.findByIdAndUpdate(partnerLinkId, {
+              $push: {
+                signups: {
+                  userId: user._id,
+                  name: user.name,
+                  email: user.email,
+                  signedUpAt: new Date(),
+                },
+              },
+            });
+          } catch (pErr) {
+            console.error("[PARTNER GOOGLE SIGNUP ERROR]:", pErr);
+          }
+        }
       }
     }
 

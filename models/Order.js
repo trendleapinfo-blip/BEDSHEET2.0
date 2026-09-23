@@ -151,6 +151,15 @@ const OrderSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    referredByCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+    partnerLinkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PartnerLink",
+    },
   },
   { timestamps: true }
 );

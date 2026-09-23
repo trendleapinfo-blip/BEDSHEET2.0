@@ -5,6 +5,7 @@ import ScrollToTop from "./components/ScrollToTop";
 import Script from "next/script";
 import { Analytics } from "@vercel/analytics/next";
 import AnalyticsTracker from "./components/AnalyticsTracker";
+import ReferralTracker from "./components/ReferralTracker";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-serif",
@@ -129,6 +130,7 @@ export default function RootLayout({ children }) {
           }}
         />
         <ScrollToTop />
+        <ReferralTracker />
         {children}
         <Chatbot />
         <Analytics />

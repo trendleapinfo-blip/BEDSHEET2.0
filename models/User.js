@@ -91,6 +91,15 @@ const UserSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    referredByCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+    partnerLinkId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PartnerLink",
+    },
     pushSubscriptions: {
       type: Array,
       default: [],

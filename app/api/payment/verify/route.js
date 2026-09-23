@@ -11,6 +11,7 @@ import Coupon from "@/models/Coupon";
 import BrandSettings from "@/models/BrandSettings";
 import Bundle from "@/models/Bundle";
 import DurationDiscount from "@/models/DurationDiscount";
+import PartnerLink from "@/models/PartnerLink";
 import { sendOrderConfirmationEmail } from "@/lib/mailer";
 
 export async function POST(request) {
@@ -267,6 +268,18 @@ export async function POST(request) {
       bundleName += ` Custom (${customizations})`;
     }
 
+    // Check for referral code on user or cookies
+    const cookieRef = (cookieStore.get("closerush_ref_code")?.value || "").trim().toUpperCase();
+    let orderPartnerLinkId = updatedUser.partnerLinkId || null;
+    let orderReferredByCode = updatedUser.referredByCode || (cookieRef || null);
+
+    if (!orderPartnerLinkId && orderReferredByCode) {
+      const partnerDoc = await PartnerLink.findOne({ code: orderReferredByCode, status: "ACTIVE" });
+      if (partnerDoc) {
+        orderPartnerLinkId = partnerDoc._id;
+      }
+    }
+
     // Create a new Order in Database
     const newOrder = await Order.create({
       bundleOrderId,
@@ -293,7 +306,32 @@ export async function POST(request) {
       endDate,
       deliveryAddress: updatedUser.address || "—",
       razorpayPaymentId: razorpay_payment_id,
+      referredByCode: orderReferredByCode || undefined,
+      partnerLinkId: orderPartnerLinkId || undefined,
     });
+
+    // Record order in PartnerLink if attributed
+    if (orderPartnerLinkId) {
+      try {
+        await PartnerLink.findByIdAndUpdate(orderPartnerLinkId, {
+          $inc: { totalRevenue: computedTotalPrice },
+          $push: {
+            orders: {
+              orderId: bundleOrderId,
+              userId: updatedUser._id.toString(),
+              userEmail: updatedUser.email,
+              bundleName,
+              amount: computedTotalPrice,
+              orderType: orderType || "RENT",
+              status: "ACTIVE",
+              orderedAt: new Date(),
+            },
+          },
+        });
+      } catch (pErr) {
+        console.error("[PARTNER ORDER RECORD ERROR]:", pErr);
+      }
+    }
 
     if (coupon) {
       await Coupon.findByIdAndUpdate(coupon._id, {

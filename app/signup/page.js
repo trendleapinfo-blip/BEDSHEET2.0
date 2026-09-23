@@ -35,7 +35,10 @@ function SignupFormContent() {
 
   // OTP States
   const [verificationRequired, setVerificationRequired] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
+  // Referral / PG Promo Code
+  const urlRef = searchParams.get("ref") || searchParams.get("partner") || "";
+  const [manualRefCode, setManualRefCode] = useState(urlRef ? urlRef.toUpperCase() : "");
+  const [showPromoInput, setShowPromoInput] = useState(Boolean(urlRef));
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -104,6 +107,14 @@ function SignupFormContent() {
     setLoading(true);
 
     try {
+      let storedRef = "";
+      if (typeof window !== "undefined") {
+        try {
+          storedRef = localStorage.getItem("closerush_ref_code") || "";
+        } catch (_) {}
+      }
+      const refCode = (manualRefCode || urlRef || storedRef || "").trim().toUpperCase();
+
       const payload = {
         name,
         email: email.toLowerCase(),
@@ -112,6 +123,7 @@ function SignupFormContent() {
         address,
         accountType,
         otpCode: verificationRequired ? otpCode : undefined,
+        refCode: refCode || undefined,
       };
 
       const res = await fetch("/api/auth/signup", {
@@ -334,6 +346,51 @@ function SignupFormContent() {
             className="w-full p-4 bg-white border border-charcoal-ink/15 rounded-none text-charcoal-ink placeholder-charcoal-ink/30 focus:outline-none focus:border-linen-gold transition-colors text-xs resize-none disabled:bg-alabaster-linen disabled:text-charcoal-ink/40"
           ></textarea>
         </div>
+
+        {/* Referral / PG Promo Code (Optional) */}
+        {!verificationRequired && (
+          <div className="pt-1">
+            {!showPromoInput && !manualRefCode ? (
+              <button
+                type="button"
+                onClick={() => setShowPromoInput(true)}
+                className="text-[11px] font-bold text-linen-gold hover:text-charcoal-ink flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <span>Have a Referral or PG Promo Code?</span>
+              </button>
+            ) : (
+              <div className="p-3 bg-linen-gold/05 border border-linen-gold/30 rounded-none space-y-1.5 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-charcoal-ink uppercase tracking-wider flex items-center gap-1">
+                    <span>Referral / PG Promo Code</span>
+                  </label>
+                  {!urlRef && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManualRefCode("");
+                        setShowPromoInput(false);
+                      }}
+                      className="text-[10px] text-charcoal-ink/50 hover:text-red-500 font-bold uppercase cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={manualRefCode}
+                  onChange={(e) => setManualRefCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. SHASWAT-4473"
+                  className="w-full px-3 py-2 bg-white border border-charcoal-ink/15 text-charcoal-ink font-mono font-bold text-xs uppercase focus:outline-none focus:border-linen-gold placeholder-charcoal-ink/30"
+                />
+                <p className="text-[10px] text-charcoal-ink/60 font-semibold">
+                  Entering your PG owner or referral code links your PG room and applies exclusive benefits.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* OTP Input Field shown step-by-step */}
         {verificationRequired && (

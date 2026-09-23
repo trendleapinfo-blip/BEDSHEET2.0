@@ -5,12 +5,13 @@ import { signToken } from "@/lib/jwt";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Otp from "@/models/Otp";
+import PartnerLink from "@/models/PartnerLink";
 import { sendOtpEmail } from "@/lib/mailer";
 
 export async function POST(request) {
   try {
     await dbConnect();
-    const { name, email, mobile, password, address, accountType, otpCode } = await request.json();
+    const { name, email, mobile, password, address, accountType, otpCode, refCode: bodyRefCode } = await request.json();
 
     // Basic Validations
     if (!name || !email || !password || !mobile) {
@@ -116,6 +117,22 @@ export async function POST(request) {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Check for referral code in cookies or request payload
+    const cookieStore = await cookies();
+    const cookieRef = cookieStore.get("closerush_ref_code")?.value;
+    const refCode = (bodyRefCode || cookieRef || "").trim().toUpperCase();
+
+    let partnerLinkId = null;
+    let validRefCode = null;
+
+    if (refCode) {
+      const partner = await PartnerLink.findOne({ code: refCode, status: "ACTIVE" });
+      if (partner) {
+        partnerLinkId = partner._id;
+        validRefCode = partner.code;
+      }
+    }
+
     // Create the User
     const newUser = await User.create({
       name,
@@ -124,7 +141,27 @@ export async function POST(request) {
       password: hashedPassword,
       address: address || "",
       accountType: accountType || "Individual User",
+      referredByCode: validRefCode || undefined,
+      partnerLinkId: partnerLinkId || undefined,
     });
+
+    // If referred by partner, add to partner's signups list
+    if (partnerLinkId) {
+      try {
+        await PartnerLink.findByIdAndUpdate(partnerLinkId, {
+          $push: {
+            signups: {
+              userId: newUser._id,
+              name: newUser.name,
+              email: newUser.email,
+              signedUpAt: new Date(),
+            },
+          },
+        });
+      } catch (pErr) {
+        console.error("[PARTNER SIGNUP LINK ERROR]:", pErr);
+      }
+    }
 
     // Generate JWT token
     const token = signToken(
@@ -133,7 +170,6 @@ export async function POST(request) {
     );
 
     // Set HTTP-Only Cookie
-    const cookieStore = await cookies();
     cookieStore.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

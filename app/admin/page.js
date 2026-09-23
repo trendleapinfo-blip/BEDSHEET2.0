@@ -38,7 +38,13 @@ import {
   Printer,
   Warehouse,
   Settings,
-  BookOpen
+  BookOpen,
+  Menu,
+  Share2,
+  Link2,
+  ExternalLink,
+  Eye,
+  Globe
 } from "lucide-react";
 
 const formatDate = (dateVal) => {
@@ -100,6 +106,30 @@ export default function AdminDashboard() {
   const [waitlistList, setWaitlistList] = useState([]);
   const [waitlistSearch, setWaitlistSearch] = useState("");
   const [waitlistStatusFilter, setWaitlistStatusFilter] = useState("ALL");
+
+  // Mobile drawer state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Partner & Referral Links State
+  const [partnerSubTab, setPartnerSubTab] = useState("links"); // "links" | "commissions"
+  const [partnerLinksList, setPartnerLinksList] = useState([]);
+  const [partnerSearch, setPartnerSearch] = useState("");
+  const [partnerLoading, setPartnerLoading] = useState(false);
+  const [showCreatePartnerModal, setShowCreatePartnerModal] = useState(false);
+  const [selectedPartnerDetails, setSelectedPartnerDetails] = useState(null);
+  const [partnerQrModal, setPartnerQrModal] = useState(null);
+  const [payoutModal, setPayoutModal] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(null);
+  const [partnerForm, setPartnerForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    customCode: "",
+    targetUrl: "/",
+    notes: "",
+    discountPercent: 10,
+    commissionRate: 10,
+  });
 
   // Refunds data state
   const [refundsList, setRefundsList] = useState([]);
@@ -490,8 +520,316 @@ export default function AdminDashboard() {
         }
       }
 
+      const partnerRes = await fetch("/api/admin/partner-links");
+      if (partnerRes.ok) {
+        const partnerJson = await partnerRes.json();
+        if (partnerJson.success) {
+          setPartnerLinksList(partnerJson.partnerLinks || []);
+        }
+      }
+
     } catch (err) {
       console.error("Error fetching admin data:", err);
+    }
+  };
+
+  const fetchPartnerLinks = async () => {
+    setPartnerLoading(true);
+    try {
+      const res = await fetch("/api/admin/partner-links");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setPartnerLinksList(data.partnerLinks || []);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load partner links:", err);
+    } finally {
+      setPartnerLoading(false);
+    }
+  };
+
+  const handleCreatePartnerLink = async (e) => {
+    e.preventDefault();
+    if (!partnerForm.name || !partnerForm.email) {
+      alert("Please provide both PG/Partner Name and Email.");
+      return;
+    }
+
+    try {
+      setPartnerLoading(true);
+      const res = await fetch("/api/admin/partner-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(partnerForm),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to create partner link");
+        return;
+      }
+
+      alert("Referral Link created successfully!");
+      setShowCreatePartnerModal(false);
+      setPartnerForm({
+        name: "",
+        email: "",
+        phone: "",
+        customCode: "",
+        targetUrl: "/",
+        notes: "",
+        discountPercent: 10,
+        commissionRate: 10,
+      });
+      fetchPartnerLinks();
+    } catch (err) {
+      console.error("Create partner link error:", err);
+      alert("Error creating link: " + err.message);
+    } finally {
+      setPartnerLoading(false);
+    }
+  };
+
+  const handleTogglePartnerStatus = async (id, currentStatus) => {
+    const nextStatus = currentStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    try {
+      const res = await fetch("/api/admin/partner-links", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: nextStatus }),
+      });
+      if (res.ok) {
+        fetchPartnerLinks();
+      }
+    } catch (err) {
+      console.error("Status toggle error:", err);
+    }
+  };
+
+  const handleDeletePartnerLink = async (id, name) => {
+    if (!confirm(`Are you sure you want to delete the referral link for "${name}"?`)) return;
+    try {
+      const res = await fetch(`/api/admin/partner-links?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        fetchPartnerLinks();
+      } else {
+        const d = await res.json();
+        alert(d.error || "Failed to delete");
+      }
+    } catch (err) {
+      console.error("Delete partner link error:", err);
+    }
+  };
+
+  const handleRecordPayout = async (e) => {
+    e.preventDefault();
+    if (!payoutModal || !payoutModal.amount) return;
+    try {
+      setPartnerLoading(true);
+      const res = await fetch("/api/admin/partner-links", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: payoutModal.partner._id,
+          action: "payout",
+          payoutAmount: payoutModal.amount,
+          reference: payoutModal.reference,
+          notes: payoutModal.notes,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPayoutModal(null);
+        fetchPartnerLinks();
+      } else {
+        alert(data.error || "Failed to record payout");
+      }
+    } catch (err) {
+      console.error("Record payout error:", err);
+    } finally {
+      setPartnerLoading(false);
+    }
+  };
+
+  const [downloadingPoster, setDownloadingPoster] = useState(false);
+
+  const copyReferralUrl = (code, target = "/") => {
+    if (typeof window === "undefined") return;
+    const origin = window.location.origin;
+    const path = target && target !== "/" ? target : "";
+    const fullUrl = `${origin}${path}${path.includes("?") ? "&" : "?"}ref=${code}`;
+    navigator.clipboard.writeText(fullUrl);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2500);
+  };
+
+  const handleDownloadPosterImage = async (partner, url) => {
+    setDownloadingPoster(true);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 900;
+      canvas.height = 1250;
+      const ctx = canvas.getContext("2d");
+
+      // Background Gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, 1250);
+      grad.addColorStop(0, "#02161a");
+      grad.addColorStop(0.3, "#04262d");
+      grad.addColorStop(0.7, "#032026");
+      grad.addColorStop(1, "#010f13");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 900, 1250);
+
+      // Outer glowing borders
+      ctx.strokeStyle = "#05D4B5";
+      ctx.lineWidth = 6;
+      ctx.strokeRect(20, 20, 860, 1210);
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(30, 30, 840, 1190);
+
+      // Top Exclusive Partner Badge
+      ctx.fillStyle = "rgba(5, 212, 181, 0.15)";
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(140, 55, 620, 48, 24);
+      } else {
+        ctx.rect(140, 55, 620, 48);
+      }
+      ctx.fill();
+      ctx.strokeStyle = "#05D4B5";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#05D4B5";
+      ctx.font = "bold 18px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`★ ${partner.name.toUpperCase()} EXCLUSIVE PARTNER ★`, 450, 86);
+
+      // Brand Title
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "900 52px serif";
+      ctx.fillText("ClosetRush", 450, 155);
+
+      // Subtitle
+      ctx.fillStyle = "#F59E0B";
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText("PREMIUM FRESH BEDSHEET & LINEN SERVICE", 450, 190);
+
+      // Value proposition banner
+      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(70, 215, 760, 80, 16);
+      } else {
+        ctx.rect(70, 215, 760, 80);
+      }
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 22px sans-serif";
+      ctx.fillText("🛏️ Never Sleep on Dirty Bedsheets Again!", 450, 250);
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "16px sans-serif";
+      ctx.fillText("100% Machine Washed & Steam Sanitized Organic Bedsheets delivered weekly to your PG.", 450, 278);
+
+      // Load QR Code
+      const qrImg = new Image();
+      qrImg.crossOrigin = "anonymous";
+      const qrUrl = `https://quickchart.io/qr?size=500&text=${encodeURIComponent(url)}&dark=032026&margin=1`;
+      
+      await new Promise((resolve, reject) => {
+        qrImg.onload = resolve;
+        qrImg.onerror = () => {
+          // fallback direct image creation
+          resolve();
+        };
+        qrImg.src = qrUrl;
+      });
+
+      // QR Container White Card
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(230, 320, 440, 460, 24);
+      } else {
+        ctx.rect(230, 320, 440, 460);
+      }
+      ctx.fill();
+      ctx.strokeStyle = "#05D4B5";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      if (qrImg.complete && qrImg.naturalWidth > 0) {
+        ctx.drawImage(qrImg, 270, 350, 360, 360);
+      }
+
+      ctx.fillStyle = "#032026";
+      ctx.font = "900 17px sans-serif";
+      ctx.fillText("📲 SCAN WITH CAMERA TO ORDER", 450, 748);
+
+      // Promo Code Badge
+      ctx.fillStyle = "#F59E0B";
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(160, 805, 580, 58, 14);
+      } else {
+        ctx.rect(160, 805, 580, 58);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = "#02161b";
+      ctx.font = "900 22px monospace";
+      const discountText = partner.discountPercent ? ` (${partner.discountPercent}% OFF)` : "";
+      ctx.fillText(`USE CODE: ${partner.code}${discountText}`, 450, 842);
+
+      // Perks Card
+      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(70, 885, 760, 220, 18);
+      } else {
+        ctx.rect(70, 885, 760, 220);
+      }
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 20px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("✔ Weekly Fresh Linen Swaps", 120, 940);
+      ctx.fillText("✔ Starts @ Just ₹100 / Month", 480, 940);
+      ctx.fillText("✔ 100% Anti-Acne & Dust-Mite Free", 120, 1000);
+      ctx.fillText("✔ Free Delivery Directly to PG Room", 480, 1000);
+      ctx.fillText("✔ Steam Sanitized & Hypoallergenic", 120, 1060);
+      ctx.fillText("✔ Pause or Cancel Anytime", 480, 1060);
+
+      // Footer
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "15px sans-serif";
+      ctx.fillText("Visit: closetrush.in  •  Contact PG Reception or Scan to Order", 450, 1170);
+
+      // Download trigger
+      const link = document.createElement("a");
+      link.download = `ClosetRush_Poster_${partner.code}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("Poster download error:", err);
+      window.open(`https://quickchart.io/qr?size=800&text=${encodeURIComponent(url)}&dark=032026&margin=1`, "_blank");
+    } finally {
+      setDownloadingPoster(false);
     }
   };
 
@@ -1427,6 +1765,7 @@ export default function AdminDashboard() {
   // Sidebar items
   const sidebarItems = [
     { name: "Dashboard", icon: LayoutDashboard },
+    { name: "Referral Links", icon: Share2 },
     { name: "Analytics", icon: BarChart3 },
     { name: "Push Notifications", icon: Bell },
     { name: "Categories", icon: Tag },
@@ -1446,24 +1785,44 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex h-screen bg-alabaster-linen text-charcoal-ink font-sans antialiased overflow-hidden admin-theme">
+      {/* MOBILE BACKDROP */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-xs transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="w-64 bg-white border-r border-black/05 flex flex-col justify-between shrink-0 z-20 h-full overflow-hidden">
+      <aside className={`fixed inset-y-0 left-0 z-50 md:static w-72 md:w-64 bg-white border-r border-black/05 flex flex-col justify-between shrink-0 h-full overflow-hidden transition-transform duration-300 ease-in-out ${
+        isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0"
+      }`}>
         <div className="flex-1 overflow-y-auto min-h-0 py-1">
           {/* Sidebar Header */}
-          <div className="p-6 border-b border-black/05 flex items-center justify-between sticky top-0 bg-white z-10">
-            <Link href="/" className="flex items-center gap-2">
+          <div className="p-5 md:p-6 border-b border-black/05 flex items-center justify-between sticky top-0 bg-white z-10">
+            <Link href="/" className="flex items-center gap-2" onClick={() => setIsMobileMenuOpen(false)}>
               <span className="text-xl font-serif font-bold bg-gradient-to-r from-linen-gold to-charcoal-ink bg-clip-text text-transparent">
                 ClosetRush
               </span>
             </Link>
-            <span className="text-[9px] font-bold bg-linen-gold/15 text-linen-gold border border-linen-gold/25 px-1.5 py-0.5 rounded-none uppercase tracking-wider">
-              Admin
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-bold bg-linen-gold/15 text-linen-gold border border-linen-gold/25 px-1.5 py-0.5 rounded-none uppercase tracking-wider">
+                Admin
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="md:hidden p-1.5 text-charcoal-ink/50 hover:text-charcoal-ink rounded-none"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* User badge */}
           <div className="p-4 mx-3 my-4 bg-alabaster-linen border border-black/05 rounded-none flex items-center gap-3">
-            <div className="h-10 w-10 rounded-none bg-linen-gold text-white flex items-center justify-center font-bold text-sm uppercase font-serif">
+            <div className="h-10 w-10 rounded-none bg-linen-gold text-white flex items-center justify-center font-bold text-sm uppercase font-serif shrink-0">
               {sessionUser.name.charAt(0)}
             </div>
             <div className="overflow-hidden">
@@ -1482,6 +1841,7 @@ export default function AdminDashboard() {
                   <Link
                     key={item.name}
                     href={item.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 rounded-none text-xs font-bold uppercase tracking-wider text-charcoal-ink/65 hover:bg-black/02 hover:text-charcoal-ink border border-transparent transition-all"
                   >
                     <Icon className="h-4.5 w-4.5 shrink-0 text-linen-gold" />
@@ -1492,14 +1852,17 @@ export default function AdminDashboard() {
               return (
                 <button
                   key={item.name}
-                  onClick={() => setActiveTab(item.name)}
+                  onClick={() => {
+                    setActiveTab(item.name);
+                    setIsMobileMenuOpen(false);
+                  }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-none text-xs font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer ${isActive
                       ? "bg-linen-gold/10 text-linen-gold border border-linen-gold/20"
                       : "text-charcoal-ink/65 hover:bg-black/02 hover:text-charcoal-ink border border-transparent"
                     }`}
                 >
                   <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? "text-linen-gold" : "text-charcoal-ink/40"}`} />
-                  <span>{item.name}</span>
+                  <span className="truncate">{item.name}</span>
                 </button>
               );
             })}
@@ -1512,14 +1875,14 @@ export default function AdminDashboard() {
             href="/"
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-none text-xs font-bold uppercase tracking-wider text-charcoal-ink/60 hover:bg-black/02 hover:text-charcoal-ink border border-transparent transition-all"
           >
-            <Home className="h-4.5 w-4.5 text-charcoal-ink/40" />
+            <Home className="h-4.5 w-4.5 text-charcoal-ink/40 shrink-0" />
             <span>Go to Home</span>
           </Link>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-none text-xs font-bold uppercase tracking-wider text-rose-500 hover:bg-rose-50 hover:text-rose-700 border border-transparent transition-all cursor-pointer"
           >
-            <LogOut className="h-4.5 w-4.5 text-rose-500" />
+            <LogOut className="h-4.5 w-4.5 text-rose-500 shrink-0" />
             <span>Logout</span>
           </button>
         </div>
@@ -1528,31 +1891,42 @@ export default function AdminDashboard() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 bg-alabaster-linen overflow-y-auto">
         {/* Top Navbar */}
-        <header className="h-16 border-b border-black/05 px-8 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-30">
-          <div className="flex items-center gap-2">
-            <span className="text-charcoal-ink/40 font-bold text-xs uppercase tracking-wider">Admin</span>
-            <span className="text-black/10 text-xs">/</span>
-            <span className="text-charcoal-ink font-bold text-xs uppercase tracking-wider">{activeTab}</span>
+        <header className="h-16 border-b border-black/05 px-4 sm:px-8 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md sticky top-0 z-30">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-2 -ml-1.5 text-charcoal-ink hover:text-linen-gold hover:bg-black/05 transition-colors cursor-pointer rounded-none"
+              aria-label="Open sidebar menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="hidden sm:inline text-charcoal-ink/40 font-bold text-xs uppercase tracking-wider">Admin</span>
+              <span className="hidden sm:inline text-black/10 text-xs">/</span>
+              <span className="text-charcoal-ink font-bold text-xs sm:text-xs uppercase tracking-wider truncate max-w-[150px] sm:max-w-none">{activeTab}</span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={triggerSeeder}
               disabled={seedingLoading}
-              className="py-1.5 px-3.5 rounded-none bg-transparent hover:bg-black/05 text-charcoal-ink/75 border border-black/10 text-2xs font-extrabold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="py-1.5 px-2.5 sm:px-3.5 rounded-none bg-transparent hover:bg-black/05 text-charcoal-ink/75 border border-black/10 text-3xs sm:text-2xs font-extrabold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <RefreshCcw className={`h-3 w-3 text-charcoal-ink/50 ${seedingLoading ? "animate-spin" : ""}`} />
-              Reset Seeder Data
+              <span className="hidden sm:inline">Reset Seeder Data</span>
+              <span className="sm:hidden">Reset</span>
             </button>
-            <span className="h-4 w-px bg-black/10" />
-            <div className="text-2xs font-bold uppercase tracking-wider text-charcoal-ink/40">
-              Session Expires in: <span className="text-linen-gold font-extrabold">7d</span>
+            <span className="h-4 w-px bg-black/10 hidden sm:inline-block" />
+            <div className="hidden sm:block text-2xs font-bold uppercase tracking-wider text-charcoal-ink/40">
+              Session: <span className="text-linen-gold font-extrabold">7d</span>
             </div>
           </div>
         </header>
 
         {/* Content Container */}
-        <div className="p-8 flex-1">
+        <div className="p-4 sm:p-6 md:p-8 flex-1">
           {/* TAB: DASHBOARD */}
           {activeTab === "Dashboard" && (
             <div className="space-y-8 animate-fadeIn">
@@ -1709,6 +2083,1135 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: REFERRAL LINKS */}
+          {activeTab === "Referral Links" && (
+            <div className="space-y-6 sm:space-y-8 animate-fadeIn text-slate-900">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 border-2 border-slate-200 shadow-sm">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 bg-slate-900 text-white font-bold">
+                      <Share2 className="h-5 w-5" />
+                    </span>
+                    <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">PG & Referral Partner Tracking</h1>
+                  </div>
+                  <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider mt-1.5">
+                    Generate unique links for PG owners & customers. Track real-time clicks, signups & revenue.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePartnerModal(true)}
+                  className="w-full sm:w-auto py-3 px-5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Plus className="h-4 w-4 text-amber-400" />
+                  <span>Generate New Link</span>
+                </button>
+              </div>
+
+              {/* Sub-Tab Navigation */}
+              <div className="flex border-b-2 border-slate-200 gap-2 bg-white px-4 pt-3 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setPartnerSubTab("links")}
+                  className={`pb-3 px-5 text-xs font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer border-b-2 transition-all ${
+                    partnerSubTab === "links"
+                      ? "border-slate-900 text-slate-900"
+                      : "border-transparent text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  <Share2 className="h-4 w-4" />
+                  <span>Referral Links & Wall Posters</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPartnerSubTab("commissions")}
+                  className={`pb-3 px-5 text-xs font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer border-b-2 transition-all ${
+                    partnerSubTab === "commissions"
+                      ? "border-slate-900 text-slate-900"
+                      : "border-transparent text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                  <span>Commissions & Payouts</span>
+                </button>
+              </div>
+
+              {partnerSubTab === "links" ? (
+                <>
+                  {/* Stat Summary Cards for Links */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                    <div className="bg-white border-2 border-slate-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-slate-500 uppercase tracking-wider block">Total Active Partners</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-slate-950 mt-1.5">{partnerLinksList.length}</h3>
+                      <p className="text-xs font-bold text-slate-600 mt-1">Registered PG owners & users</p>
+                    </div>
+                    <div className="bg-blue-50/80 border-2 border-blue-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-blue-900 uppercase tracking-wider block">Total Link Clicks</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-blue-950 mt-1.5">
+                        {partnerLinksList.reduce((acc, p) => acc + (p.clicks || 0), 0)}
+                      </h3>
+                      <p className="text-xs font-bold text-blue-800 mt-1">Unique page visits captured</p>
+                    </div>
+                    <div className="bg-emerald-50/80 border-2 border-emerald-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-emerald-900 uppercase tracking-wider block">Referred Signups</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-emerald-950 mt-1.5">
+                        {partnerLinksList.reduce((acc, p) => acc + (p.signupsCount || 0), 0)}
+                      </h3>
+                      <p className="text-xs font-bold text-emerald-800 mt-1">User accounts created</p>
+                    </div>
+                    <div className="bg-amber-50/80 border-2 border-amber-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-amber-900 uppercase tracking-wider block">Total Sales GMV</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-amber-950 mt-1.5">
+                        ₹{partnerLinksList.reduce((acc, p) => acc + (p.totalRevenue || 0), 0).toLocaleString("en-IN")}
+                      </h3>
+                      <p className="text-xs font-bold text-amber-900 mt-1">
+                        {partnerLinksList.reduce((acc, p) => acc + (p.ordersCount || 0), 0)} paid orders/subscriptions
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Search and Refresh Bar */}
+                  <div className="bg-white border-2 border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+                    <div className="relative w-full sm:w-96">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <input
+                        type="text"
+                        placeholder="Search by PG name, email, or referral code..."
+                        value={partnerSearch}
+                        onChange={(e) => setPartnerSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-2 border-slate-200 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:border-slate-900 focus:bg-white"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchPartnerLinks}
+                      disabled={partnerLoading}
+                      className="w-full sm:w-auto px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-xs font-black uppercase tracking-wider text-white flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-xs"
+                    >
+                      <RefreshCcw className={`h-3.5 w-3.5 text-amber-400 ${partnerLoading ? "animate-spin" : ""}`} />
+                      <span>Refresh Links Data</span>
+                    </button>
+                  </div>
+
+                  {/* Tabular View for Referral Links */}
+                  {(() => {
+                    const filtered = partnerLinksList.filter((p) => {
+                      if (!partnerSearch) return true;
+                      const q = partnerSearch.toLowerCase();
+                      return (
+                        (p.name && p.name.toLowerCase().includes(q)) ||
+                        (p.email && p.email.toLowerCase().includes(q)) ||
+                        (p.code && p.code.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="bg-white border-2 border-slate-200 p-12 text-center shadow-sm">
+                          <Share2 className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                          <h4 className="text-base font-black text-slate-900">No referral links found</h4>
+                          <p className="text-xs text-slate-600 font-medium mt-1 max-w-sm mx-auto">
+                            Click &quot;Generate New Link&quot; above to create a unique tracking link for your first PG partner.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="bg-white border-2 border-slate-200 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse min-w-[900px]">
+                            <thead>
+                              <tr className="bg-slate-900 text-white font-black uppercase tracking-wider text-[11px] border-b border-slate-800">
+                                <th className="py-4 px-4 font-black">Partner / PG Info</th>
+                                <th className="py-4 px-4 font-black">Referral Code & Link</th>
+                                <th className="py-4 px-3 text-center font-black">Clicks</th>
+                                <th className="py-4 px-3 text-center font-black">Signups</th>
+                                <th className="py-4 px-3 text-center font-black">Orders</th>
+                                <th className="py-4 px-4 text-right font-black">Revenue</th>
+                                <th className="py-4 px-3 text-center font-black">Status</th>
+                                <th className="py-4 px-4 text-right font-black">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y-2 divide-slate-100 font-medium">
+                              {filtered.map((partner) => {
+                                const origin = typeof window !== "undefined" ? window.location.origin : "https://closetrush.in";
+                                const targetPath = partner.targetUrl && partner.targetUrl !== "/" ? partner.targetUrl : "";
+                                const fullUrl = `${origin}${targetPath}${targetPath.includes("?") ? "&" : "?"}ref=${partner.code}`;
+                                const isCopied = copiedCode === partner.code;
+
+                                return (
+                                  <tr key={partner._id} className="hover:bg-slate-50 transition-colors">
+                                    {/* Partner info */}
+                                    <td className="py-3.5 px-4">
+                                      <div className="flex items-center gap-3">
+                                        <div className="h-9 w-9 bg-slate-900 text-white flex items-center justify-center font-black text-sm font-serif shrink-0">
+                                          {partner.name?.charAt(0) || "P"}
+                                        </div>
+                                        <div>
+                                          <p className="font-black text-slate-950 text-sm">{partner.name}</p>
+                                          <p className="text-slate-700 font-bold text-xs">{partner.email}</p>
+                                          {partner.phone && <p className="text-slate-500 font-semibold text-[11px]">{partner.phone}</p>}
+                                        </div>
+                                      </div>
+                                    </td>
+
+                                    {/* Referral Code & Link */}
+                                    <td className="py-3.5 px-4">
+                                      <div className="space-y-1.5 max-w-xs">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-mono font-black text-slate-950 bg-amber-400 px-2 py-0.5 text-xs shadow-2xs">
+                                            {partner.code}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => copyReferralUrl(partner.code, partner.targetUrl)}
+                                            className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
+                                              isCopied
+                                                ? "bg-emerald-600 text-white"
+                                                : "bg-slate-900 hover:bg-slate-800 text-white"
+                                            }`}
+                                          >
+                                            {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                            <span>{isCopied ? "Copied" : "Copy"}</span>
+                                          </button>
+                                          <a
+                                            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                                              `Hi, use this link to check out ClosetRush fresh bedsheets service: ${fullUrl}`
+                                            )}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-1.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white flex items-center justify-center shadow-2xs"
+                                            title="Share on WhatsApp"
+                                          >
+                                            <Share2 className="h-3.5 w-3.5" />
+                                          </a>
+                                          <button
+                                            type="button"
+                                            onClick={() => setPartnerQrModal({ partner, url: fullUrl })}
+                                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300 flex items-center justify-center cursor-pointer shadow-2xs"
+                                            title="Generate & Print QR Code Poster"
+                                          >
+                                            <QrCode className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                        <p className="text-[11px] font-mono text-slate-600 truncate max-w-[220px]" title={fullUrl}>
+                                          {fullUrl}
+                                        </p>
+                                        <div className="flex items-center gap-1.5 text-[9px] font-black uppercase pt-0.5">
+                                          <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                            {partner.discountPercent || 10}% Tenant Discount
+                                          </span>
+                                          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-900 border border-purple-300">
+                                            {partner.commissionRate || 10}% PG Comm.
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </td>
+
+                                    {/* Clicks */}
+                                    <td className="py-3.5 px-3 text-center">
+                                      <span className="inline-block px-3 py-1 bg-blue-50 border border-blue-200 text-blue-950 font-black text-sm">
+                                        {partner.clicks || 0}
+                                      </span>
+                                    </td>
+
+                                    {/* Signups */}
+                                    <td className="py-3.5 px-3 text-center">
+                                      <div className="inline-flex flex-col items-center">
+                                        <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-950 font-black text-sm">
+                                          {partner.signupsCount || 0}
+                                        </span>
+                                        {partner.signupsCount > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setSelectedPartnerDetails({ partner, tab: "signups" })}
+                                            className="text-[10px] font-black text-emerald-800 hover:text-emerald-950 underline mt-1 cursor-pointer flex items-center gap-0.5"
+                                          >
+                                            <Eye className="h-3 w-3" /> View Users
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* Orders */}
+                                    <td className="py-3.5 px-3 text-center">
+                                      <div className="inline-flex flex-col items-center">
+                                        <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-950 font-black text-sm">
+                                          {partner.ordersCount || 0}
+                                        </span>
+                                        {partner.ordersCount > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setSelectedPartnerDetails({ partner, tab: "orders" })}
+                                            className="text-[10px] font-black text-amber-800 hover:text-amber-950 underline mt-1 cursor-pointer flex items-center gap-0.5"
+                                          >
+                                            <Eye className="h-3 w-3" /> View Orders
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* Revenue */}
+                                    <td className="py-3.5 px-4 text-right">
+                                      <span className="font-black text-slate-950 text-sm sm:text-base">
+                                        ₹{(partner.totalRevenue || 0).toLocaleString("en-IN")}
+                                      </span>
+                                    </td>
+
+                                    {/* Status */}
+                                    <td className="py-3.5 px-3 text-center">
+                                      <span
+                                        className={`inline-block text-[10px] font-black uppercase px-2.5 py-0.5 border ${
+                                          partner.status === "ACTIVE"
+                                            ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                                            : "bg-rose-100 text-rose-900 border-rose-300"
+                                        }`}
+                                      >
+                                        {partner.status}
+                                      </span>
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="py-3.5 px-4 text-right">
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleTogglePartnerStatus(partner._id, partner.status)}
+                                          className="text-2xs font-black uppercase px-2.5 py-1.5 border border-slate-300 hover:bg-slate-200 text-slate-800 transition-colors cursor-pointer"
+                                          title={partner.status === "ACTIVE" ? "Deactivate Link" : "Activate Link"}
+                                        >
+                                          {partner.status === "ACTIVE" ? "Deactivate" : "Activate"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeletePartnerLink(partner._id, partner.name)}
+                                          className="p-1.5 text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                                          title="Delete Link"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
+              ) : (
+                /* COMMISSIONS & PAYOUTS TAB VIEW */
+                <>
+                  {/* Stat Summary Cards for Commissions */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                    <div className="bg-white border-2 border-slate-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-slate-500 uppercase tracking-wider block">Total Partner GMV</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-slate-950 mt-1.5">
+                        ₹{partnerLinksList.reduce((acc, p) => acc + (p.totalRevenue || 0), 0).toLocaleString("en-IN")}
+                      </h3>
+                      <p className="text-xs font-bold text-slate-600 mt-1">From all referred orders</p>
+                    </div>
+                    <div className="bg-emerald-50/80 border-2 border-emerald-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-emerald-900 uppercase tracking-wider block">Total Commission Earned</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-emerald-950 mt-1.5">
+                        ₹{partnerLinksList.reduce((acc, p) => acc + (p.commissionEarned || 0), 0).toLocaleString("en-IN")}
+                      </h3>
+                      <p className="text-xs font-bold text-emerald-800 mt-1">Based on partner rates</p>
+                    </div>
+                    <div className="bg-blue-50/80 border-2 border-blue-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-blue-900 uppercase tracking-wider block">Total Commission Paid</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-blue-950 mt-1.5">
+                        ₹{partnerLinksList.reduce((acc, p) => acc + (p.commissionPaid || 0), 0).toLocaleString("en-IN")}
+                      </h3>
+                      <p className="text-xs font-bold text-blue-800 mt-1">Settled to PG owners</p>
+                    </div>
+                    <div className="bg-amber-50/80 border-2 border-amber-200 p-5 shadow-sm">
+                      <span className="text-xs font-black text-amber-900 uppercase tracking-wider block">Balance Payable / Due</span>
+                      <h3 className="text-2xl sm:text-3xl font-black text-amber-950 mt-1.5">
+                        ₹{partnerLinksList.reduce((acc, p) => acc + (p.commissionDue || 0), 0).toLocaleString("en-IN")}
+                      </h3>
+                      <p className="text-xs font-bold text-amber-900 mt-1">Pending payout settlements</p>
+                    </div>
+                  </div>
+
+                  {/* Commissions Table */}
+                  {(() => {
+                    const filtered = partnerLinksList.filter((p) => {
+                      if (!partnerSearch) return true;
+                      const q = partnerSearch.toLowerCase();
+                      return (
+                        (p.name && p.name.toLowerCase().includes(q)) ||
+                        (p.email && p.email.toLowerCase().includes(q)) ||
+                        (p.code && p.code.toLowerCase().includes(q))
+                      );
+                    });
+
+                    return (
+                      <div className="bg-white border-2 border-slate-200 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse min-w-[900px]">
+                            <thead>
+                              <tr className="bg-slate-900 text-white font-black uppercase tracking-wider text-[11px] border-b border-slate-800">
+                                <th className="py-4 px-4 font-black">Partner / PG Owner</th>
+                                <th className="py-4 px-3 text-center font-black">Code</th>
+                                <th className="py-4 px-3 text-center font-black">Orders</th>
+                                <th className="py-4 px-4 text-right font-black">Total Sales GMV</th>
+                                <th className="py-4 px-3 text-center font-black">Rate (%)</th>
+                                <th className="py-4 px-4 text-right font-black">Commission Earned</th>
+                                <th className="py-4 px-4 text-right font-black">Paid to Date</th>
+                                <th className="py-4 px-4 text-right font-black">Balance Due</th>
+                                <th className="py-4 px-4 text-right font-black">Payout Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y-2 divide-slate-100 font-medium">
+                              {filtered.map((partner) => {
+                                const due = partner.commissionDue || 0;
+
+                                return (
+                                  <tr key={partner._id} className="hover:bg-slate-50 transition-colors">
+                                    {/* Partner Info */}
+                                    <td className="py-3.5 px-4">
+                                      <div>
+                                        <p className="font-black text-slate-950 text-sm">{partner.name}</p>
+                                        <p className="text-slate-700 font-bold text-xs">{partner.email}</p>
+                                        {partner.phone && <p className="text-slate-500 font-semibold text-[11px]">{partner.phone}</p>}
+                                      </div>
+                                    </td>
+
+                                    {/* Code */}
+                                    <td className="py-3.5 px-3 text-center">
+                                      <span className="font-mono font-black text-slate-950 bg-amber-400 px-2 py-0.5 text-xs shadow-2xs">
+                                        {partner.code}
+                                      </span>
+                                    </td>
+
+                                    {/* Orders Count */}
+                                    <td className="py-3.5 px-3 text-center">
+                                      <span className="px-2.5 py-1 bg-slate-100 font-black text-slate-900">
+                                        {partner.ordersCount || 0}
+                                      </span>
+                                    </td>
+
+                                    {/* Sales GMV */}
+                                    <td className="py-3.5 px-4 text-right font-black text-slate-900">
+                                      ₹{(partner.totalRevenue || 0).toLocaleString("en-IN")}
+                                    </td>
+
+                                    {/* Commission Rate */}
+                                    <td className="py-3.5 px-3 text-center font-black text-slate-900">
+                                      <span className="px-2 py-0.5 bg-purple-50 text-purple-900 border border-purple-200 font-black">
+                                        {partner.commissionRate || 10}%
+                                      </span>
+                                    </td>
+
+                                    {/* Commission Earned */}
+                                    <td className="py-3.5 px-4 text-right font-black text-emerald-800 text-sm">
+                                      ₹{(partner.commissionEarned || 0).toLocaleString("en-IN")}
+                                    </td>
+
+                                    {/* Paid to Date */}
+                                    <td className="py-3.5 px-4 text-right font-black text-blue-800">
+                                      ₹{(partner.commissionPaid || 0).toLocaleString("en-IN")}
+                                    </td>
+
+                                    {/* Balance Due */}
+                                    <td className="py-3.5 px-4 text-right">
+                                      <span className={`font-black text-sm ${due > 0 ? "text-amber-600 bg-amber-50 px-2 py-0.5 border border-amber-200" : "text-slate-400"}`}>
+                                        ₹{due.toLocaleString("en-IN")}
+                                      </span>
+                                    </td>
+
+                                    {/* Action */}
+                                    <td className="py-3.5 px-4 text-right">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setPayoutModal({
+                                            partner,
+                                            amount: due > 0 ? due : "",
+                                            reference: "",
+                                            notes: "",
+                                          })
+                                        }
+                                        className="py-1.5 px-3 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-black uppercase tracking-wider transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+                                      >
+                                        <DollarSign className="h-3.5 w-3.5 text-amber-400" />
+                                        <span>Record Payout</span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+
+              {/* MODAL: RECORD COMMISSION PAYOUT */}
+              {payoutModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fadeIn">
+                  <div className="bg-white border-2 border-slate-400 w-full max-w-md p-6 sm:p-7 shadow-2xl">
+                    <div className="flex items-center justify-between pb-4 border-b-2 border-slate-100">
+                      <div>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900">Record Commission Settlement</h3>
+                        <p className="text-xs text-slate-600 font-bold uppercase tracking-wider mt-0.5">
+                          {payoutModal.partner.name} ({payoutModal.partner.code})
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPayoutModal(null)}
+                        className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleRecordPayout} className="space-y-4 mt-5">
+                      <div className="bg-slate-50 p-3.5 border border-slate-200 space-y-1 text-xs">
+                        <div className="flex justify-between font-bold text-slate-700">
+                          <span>Total Commission Earned:</span>
+                          <span className="font-black text-slate-900">₹{payoutModal.partner.commissionEarned || 0}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-slate-700">
+                          <span>Already Paid:</span>
+                          <span className="font-black text-blue-800">₹{payoutModal.partner.commissionPaid || 0}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-slate-900 pt-1 border-t border-slate-200">
+                          <span>Current Balance Due:</span>
+                          <span className="font-black text-amber-600 text-sm">₹{payoutModal.partner.commissionDue || 0}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Payout Amount (₹) <span className="text-rose-600">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          placeholder="e.g. 500"
+                          value={payoutModal.amount}
+                          onChange={(e) => setPayoutModal({ ...payoutModal, amount: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-sm font-black text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Payment Reference / UPI / Txn ID
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. UPI Ref #492819842 / Google Pay"
+                          value={payoutModal.reference}
+                          onChange={(e) => setPayoutModal({ ...payoutModal, reference: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Settlement Notes (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Settlement for September Bedding Subscriptions"
+                          value={payoutModal.notes}
+                          onChange={(e) => setPayoutModal({ ...payoutModal, notes: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-4 border-t-2 border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setPayoutModal(null)}
+                          className="flex-1 py-3 border-2 border-slate-300 text-xs font-black uppercase tracking-wider text-slate-800 hover:bg-slate-100 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={partnerLoading || !payoutModal.amount}
+                          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md"
+                        >
+                          {partnerLoading ? "Saving..." : "Confirm Payout"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: CREATE PARTNER REFERRAL LINK */}
+              {showCreatePartnerModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fadeIn">
+                  <div className="bg-white border-2 border-slate-400 w-full max-w-lg p-6 sm:p-7 max-h-[90vh] overflow-y-auto shadow-2xl">
+                    <div className="flex items-center justify-between pb-4 border-b-2 border-slate-100">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Create PG & Referral Link</h3>
+                        <p className="text-xs text-slate-600 font-bold uppercase tracking-wider mt-0.5">Generate a unique trackable link</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCreatePartnerModal(false)}
+                        className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleCreatePartnerLink} className="space-y-4 mt-5">
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          PG / Partner Name <span className="text-rose-600">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Sunrise Luxury PG - Rajesh"
+                          value={partnerForm.name}
+                          onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Email Address <span className="text-rose-600">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="e.g. rajesh@sunrisepg.com"
+                          value={partnerForm.email}
+                          onChange={(e) => setPartnerForm({ ...partnerForm, email: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                            Phone (Optional)
+                          </label>
+                          <input
+                            type="tel"
+                            placeholder="e.g. 9876543210"
+                            value={partnerForm.phone}
+                            onChange={(e) => setPartnerForm({ ...partnerForm, phone: e.target.value })}
+                            className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                            Custom Code
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. SUNRISE"
+                            value={partnerForm.customCode}
+                            onChange={(e) => setPartnerForm({ ...partnerForm, customCode: e.target.value.toUpperCase() })}
+                            className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-mono font-bold text-slate-900 uppercase focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3 border-2 border-slate-200">
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1">
+                            Customer Discount % <span className="text-emerald-700 font-bold">(Off on Order)</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="10"
+                            value={partnerForm.discountPercent}
+                            onChange={(e) => setPartnerForm({ ...partnerForm, discountPercent: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:outline-hidden"
+                          />
+                          <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">Discount given to customer</span>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1">
+                            PG Owner Commission % <span className="text-amber-700 font-bold">(Payout)</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="10"
+                            value={partnerForm.commissionRate}
+                            onChange={(e) => setPartnerForm({ ...partnerForm, commissionRate: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:outline-hidden"
+                          />
+                          <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">Commission earned by PG</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Target Landing Page
+                        </label>
+                        <select
+                          value={partnerForm.targetUrl}
+                          onChange={(e) => setPartnerForm({ ...partnerForm, targetUrl: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        >
+                          <option value="/">Homepage (/)</option>
+                          <option value="/shop">Shop / Plans (/shop)</option>
+                          <option value="/signup">Direct Signup (/signup)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Internal Notes
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="e.g. 10% commission on first 30 days subscription"
+                          value={partnerForm.notes}
+                          onChange={(e) => setPartnerForm({ ...partnerForm, notes: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-4 border-t-2 border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreatePartnerModal(false)}
+                          className="flex-1 py-3 border-2 border-slate-300 text-xs font-black uppercase tracking-wider text-slate-800 hover:bg-slate-100 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={partnerLoading}
+                          className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md"
+                        >
+                          {partnerLoading ? "Creating..." : "Generate Link"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: VIEW PARTNER DETAILS (SIGNUPS & ORDERS) */}
+              {selectedPartnerDetails && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fadeIn">
+                  <div className="bg-white border-2 border-slate-400 w-full max-w-2xl p-6 sm:p-7 max-h-[85vh] flex flex-col shadow-2xl">
+                    <div className="flex items-center justify-between pb-4 border-b-2 border-slate-100 shrink-0">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-950">
+                          {selectedPartnerDetails.partner.name}
+                        </h3>
+                        <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mt-0.5">
+                          Referral Code: <span className="font-mono text-slate-900 font-black bg-amber-400 px-1.5 py-0.5">{selectedPartnerDetails.partner.code}</span> ({selectedPartnerDetails.partner.email})
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPartnerDetails(null)}
+                        className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {/* Sub-tabs inside modal */}
+                    <div className="flex border-b-2 border-slate-200 mt-4 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPartnerDetails({ ...selectedPartnerDetails, tab: "signups" })}
+                        className={`pb-2.5 px-5 text-xs font-black uppercase tracking-wider cursor-pointer border-b-2 transition-all ${
+                          selectedPartnerDetails.tab === "signups"
+                            ? "border-slate-900 text-slate-900"
+                            : "border-transparent text-slate-500 hover:text-slate-900"
+                        }`}
+                      >
+                        Signed-Up Users ({selectedPartnerDetails.partner.signups?.length || 0})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPartnerDetails({ ...selectedPartnerDetails, tab: "orders" })}
+                        className={`pb-2.5 px-5 text-xs font-black uppercase tracking-wider cursor-pointer border-b-2 transition-all ${
+                          selectedPartnerDetails.tab === "orders"
+                            ? "border-slate-900 text-slate-900"
+                            : "border-transparent text-slate-500 hover:text-slate-900"
+                        }`}
+                      >
+                        Orders & Purchases ({selectedPartnerDetails.partner.orders?.length || 0})
+                      </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto mt-4 pr-1">
+                      {selectedPartnerDetails.tab === "signups" ? (
+                        <div className="space-y-2">
+                          {(!selectedPartnerDetails.partner.signups || selectedPartnerDetails.partner.signups.length === 0) ? (
+                            <p className="text-xs font-bold text-slate-500 py-10 text-center">No users have signed up through this link yet.</p>
+                          ) : (
+                            <div className="divide-y-2 divide-slate-100">
+                              {selectedPartnerDetails.partner.signups.map((u, idx) => (
+                                <div key={u.id || idx} className="py-3.5 flex items-center justify-between gap-3 text-xs">
+                                  <div>
+                                    <p className="font-black text-slate-900 text-sm">{u.name || "Anonymous User"}</p>
+                                    <p className="text-slate-700 font-bold text-xs">{u.email}</p>
+                                    {u.mobile && <p className="text-slate-500 font-semibold text-[11px]">Mobile: {u.mobile}</p>}
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-xs font-bold text-slate-500 block">Joined: {formatDate(u.joinedAt)}</span>
+                                    <span className="text-[10px] font-black uppercase px-2.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 inline-block mt-1">
+                                      Active User
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {(!selectedPartnerDetails.partner.orders || selectedPartnerDetails.partner.orders.length === 0) ? (
+                            <p className="text-xs font-bold text-slate-500 py-10 text-center">No purchases or subscriptions made yet.</p>
+                          ) : (
+                            <div className="divide-y-2 divide-slate-100">
+                              {selectedPartnerDetails.partner.orders.map((ord, idx) => (
+                                <div key={ord.orderId || idx} className="py-3.5 flex items-center justify-between gap-3 text-xs">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-black text-slate-900 text-sm">{ord.bundleName}</span>
+                                      <span className="text-[10px] font-mono font-bold text-slate-500">#{ord.orderId}</span>
+                                    </div>
+                                    <p className="text-slate-700 font-bold text-xs mt-0.5">By: {ord.userName || ord.email}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-base font-black text-slate-950 block">₹{ord.amount}</span>
+                                    <span className="text-[11px] font-bold text-slate-500">Date: {formatDate(ord.orderedAt)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: BEAUTIFUL BEDSHEET-THEMED PG WALL POSTER QR */}
+              {partnerQrModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+                  <div className="bg-white border-2 border-slate-400 w-full max-w-lg p-5 sm:p-6 shadow-2xl my-auto">
+                    {/* Modal Header */}
+                    <div className="flex items-center justify-between pb-3 border-b-2 border-slate-100">
+                      <div>
+                        <h3 className="text-base sm:text-lg font-black text-slate-900">PG Wall Poster & QR Standee</h3>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Ready to print for notice boards & PG room walls</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPartnerQrModal(null)}
+                        className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {/* Poster Preview Card with Luxury Bedsheet Theme */}
+                    <div className="my-4 bg-gradient-to-b from-[#02181d] via-[#042830] to-[#011115] text-white p-5 sm:p-6 rounded-2xl border-4 border-[#05D4B5]/40 text-center shadow-xl relative overflow-hidden">
+                      {/* Decorative background ambient glows */}
+                      <div className="absolute -top-10 -right-10 w-36 h-36 bg-[#05D4B5]/20 rounded-full blur-2xl pointer-events-none" />
+                      <div className="absolute -bottom-10 -left-10 w-36 h-36 bg-amber-400/15 rounded-full blur-2xl pointer-events-none" />
+
+                      {/* Brand & Partner Badge */}
+                      <div className="flex items-center justify-center mb-1.5">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#05D4B5] bg-[#05D4B5]/15 border border-[#05D4B5]/40 px-3.5 py-1 rounded-full shadow-2xs">
+                          ★ {partnerQrModal.partner.name} Exclusive Partner ★
+                        </span>
+                      </div>
+                      
+                      <h2 className="text-2xl sm:text-3xl font-serif font-black text-white tracking-tight mt-1">
+                        ClosetRush
+                      </h2>
+                      <p className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-amber-400">
+                        Fresh Linen & Clean Bedsheet Service
+                      </p>
+
+                      {/* Bedsheet Value Proposition Card */}
+                      <div className="my-3 py-2.5 px-3 bg-white/08 border border-white/15 rounded-xl backdrop-blur-xs">
+                        <h4 className="text-xs sm:text-sm font-black text-white flex items-center justify-center gap-1.5">
+                          <span>🛏️</span> Never Sleep on Dirty Bedsheets Again!
+                        </h4>
+                        <p className="text-[10px] sm:text-[11px] text-slate-300 mt-1 font-medium">
+                          100% Machine Washed & Steam Sanitized Organic Bedsheets delivered weekly to your PG room.
+                        </p>
+                      </div>
+
+                      {/* High Resolution Scannable QR Code */}
+                      <div className="p-3 bg-white rounded-2xl shadow-lg inline-block my-1 border-3 border-[#05D4B5]/50">
+                        <img
+                          src={`https://quickchart.io/qr?size=320&text=${encodeURIComponent(partnerQrModal.url)}&dark=032026&margin=1`}
+                          alt={`QR Code for ${partnerQrModal.partner.name}`}
+                          className="w-44 h-44 sm:w-48 sm:h-48 mx-auto"
+                        />
+                        <span className="text-[10px] font-black text-[#032026] uppercase tracking-wider block mt-1.5">
+                          📲 SCAN WITH PHONE CAMERA TO ORDER
+                        </span>
+                      </div>
+
+                      {/* Promo Code & Highlights */}
+                      <div className="space-y-2 mt-2">
+                        <div className="inline-block bg-amber-400 text-slate-950 px-4 py-1.5 rounded-lg text-xs font-mono font-black shadow-md border-2 border-amber-300">
+                          PROMO CODE: {partnerQrModal.partner.code}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5 text-[9px] sm:text-[10px] font-bold text-slate-200 text-left bg-white/06 p-2.5 rounded-xl border border-white/10">
+                          <div className="flex items-center gap-1">✔ Weekly Fresh Swaps</div>
+                          <div className="flex items-center gap-1">✔ Starts @ ₹100 / Month</div>
+                          <div className="flex items-center gap-1">✔ Anti-Acne & Dust-Mite Free</div>
+                          <div className="flex items-center gap-1">✔ Free PG Room Delivery</div>
+                          <div className="flex items-center gap-1">✔ 100% Steam Sanitized</div>
+                          <div className="flex items-center gap-1">✔ Pause / Cancel Anytime</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Modal Action Buttons: Full Poster PNG, Print A4, Standalone QR */}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        {/* 1. Download Full Ready-To-Stick Flyer Image */}
+                        <button
+                          type="button"
+                          disabled={downloadingPoster}
+                          onClick={() => handleDownloadPosterImage(partnerQrModal.partner, partnerQrModal.url)}
+                          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-md disabled:opacity-50 cursor-pointer transition-colors"
+                        >
+                          <Download className="h-4 w-4" />
+                          <span>{downloadingPoster ? "Generating Poster..." : "Download Poster (PNG)"}</span>
+                        </button>
+
+                        {/* 2. Instant A4 Wall Print */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const printWindow = window.open("", "_blank");
+                            if (printWindow) {
+                              printWindow.document.write(`
+                                <!DOCTYPE html>
+                                <html>
+                                  <head>
+                                    <title>ClosetRush PG Poster - ${partnerQrModal.partner.name}</title>
+                                    <style>
+                                      @page { size: A4 portrait; margin: 12mm; }
+                                      body {
+                                        font-family: 'Helvetica Neue', Arial, sans-serif;
+                                        background: #fff;
+                                        color: #032026;
+                                        margin: 0;
+                                        padding: 0;
+                                        display: flex;
+                                        justify-content: center;
+                                        align-items: center;
+                                        min-height: 100vh;
+                                      }
+                                      .poster {
+                                        width: 100%;
+                                        max-width: 520px;
+                                        border: 5px solid #032026;
+                                        border-radius: 24px;
+                                        padding: 34px 26px;
+                                        text-align: center;
+                                        background: #faf8f5;
+                                        box-sizing: border-box;
+                                      }
+                                      .badge {
+                                        display: inline-block;
+                                        background: #032026;
+                                        color: #05D4B5;
+                                        font-size: 11px;
+                                        font-weight: 900;
+                                        text-transform: uppercase;
+                                        letter-spacing: 2px;
+                                        padding: 5px 16px;
+                                        border-radius: 20px;
+                                        margin-bottom: 12px;
+                                      }
+                                      h1 {
+                                        font-size: 38px;
+                                        margin: 0 0 4px 0;
+                                        color: #032026;
+                                        font-weight: 900;
+                                        letter-spacing: -0.5px;
+                                      }
+                                      .sub {
+                                        font-size: 13px;
+                                        font-weight: 900;
+                                        text-transform: uppercase;
+                                        letter-spacing: 1.5px;
+                                        color: #d97706;
+                                        margin-bottom: 18px;
+                                      }
+                                      .box {
+                                        background: #fff;
+                                        border: 2px solid #e2ded8;
+                                        border-radius: 14px;
+                                        padding: 14px;
+                                        margin-bottom: 18px;
+                                      }
+                                      .box h3 {
+                                        margin: 0 0 4px 0;
+                                        font-size: 16px;
+                                        font-weight: 900;
+                                        color: #032026;
+                                      }
+                                      .box p {
+                                        margin: 0;
+                                        font-size: 12px;
+                                        color: #555;
+                                        line-height: 1.4;
+                                      }
+                                      .qr-frame {
+                                        background: #fff;
+                                        border: 4px solid #032026;
+                                        border-radius: 18px;
+                                        padding: 18px;
+                                        display: inline-block;
+                                        margin: 8px 0;
+                                      }
+                                      .qr-frame img {
+                                        width: 250px;
+                                        height: 250px;
+                                        display: block;
+                                        margin: 0 auto;
+                                      }
+                                      .qr-text {
+                                        margin-top: 10px;
+                                        font-size: 12px;
+                                        font-weight: 900;
+                                        letter-spacing: 1px;
+                                        color: #032026;
+                                        text-transform: uppercase;
+                                      }
+                                      .code {
+                                        display: inline-block;
+                                        background: #fbbf24;
+                                        color: #032026;
+                                        font-size: 15px;
+                                        font-weight: 900;
+                                        font-family: monospace;
+                                        padding: 7px 20px;
+                                        border-radius: 8px;
+                                        margin: 12px 0 8px 0;
+                                        border: 2px solid #032026;
+                                      }
+                                      .perks {
+                                        display: grid;
+                                        grid-template-columns: 1fr 1fr;
+                                        gap: 10px;
+                                        font-size: 11px;
+                                        font-weight: 800;
+                                        color: #1e293b;
+                                        text-align: left;
+                                        background: #fff;
+                                        padding: 14px 18px;
+                                        border-radius: 12px;
+                                        border: 1.5px solid #e2ded8;
+                                        margin-top: 14px;
+                                      }
+                                      .footer {
+                                        margin-top: 18px;
+                                        font-size: 11px;
+                                        color: #64748b;
+                                        font-weight: 700;
+                                      }
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <div class="poster">
+                                      <div class="badge">★ ${partnerQrModal.partner.name} Partner ★</div>
+                                      <h1>ClosetRush</h1>
+                                      <div class="sub">Fresh Bedsheet & Linen Rental Service</div>
+                                      
+                                      <div class="box">
+                                        <h3>🛏️ Never Sleep on Dirty Bedsheets Again!</h3>
+                                        <p>100% Machine Washed & Steam Sanitized Organic Bedsheets delivered weekly to your PG room.</p>
+                                      </div>
+
+                                      <div class="qr-frame">
+                                        <img src="https://quickchart.io/qr?size=320&text=${encodeURIComponent(partnerQrModal.url)}&dark=032026&margin=1" />
+                                        <div class="qr-text">📲 Scan with Phone Camera to Order</div>
+                                      </div>
+
+                                      <div>
+                                        <div class="code">PROMO CODE: ${partnerQrModal.partner.code}</div>
+                                      </div>
+
+                                      <div class="perks">
+                                        <div>✔ Weekly Fresh Linen Swaps</div>
+                                        <div>✔ Starts @ ₹100 / Month</div>
+                                        <div>✔ Free PG Room Delivery</div>
+                                        <div>✔ 100% Steam Sanitized</div>
+                                        <div>✔ Anti-Acne & Dust-Mite Free</div>
+                                        <div>✔ Pause / Cancel Anytime</div>
+                                      </div>
+
+                                      <div class="footer">
+                                        Visit: closetrush.in | Contact PG Reception
+                                      </div>
+                                    </div>
+                                    <script>
+                                      window.onload = function() {
+                                        setTimeout(() => { window.print(); }, 400);
+                                      }
+                                    </script>
+                                  </body>
+                                </html>
+                              `);
+                              printWindow.document.close();
+                            }
+                          }}
+                          className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-md transition-colors"
+                        >
+                          <Printer className="h-4 w-4 text-amber-400" />
+                          <span>Print Wall Poster</span>
+                        </button>
+                      </div>
+
+                      {/* 3. Standalone QR Code Download */}
+                      <a
+                        href={`https://quickchart.io/qr?size=1000&text=${encodeURIComponent(partnerQrModal.url)}&dark=032026&margin=1`}
+                        download={`ClosetRush_QR_${partnerQrModal.partner.code}.png`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors text-center block"
+                      >
+                        <QrCode className="h-3.5 w-3.5 text-slate-600" />
+                        <span>Download Standalone QR Only (1000px PNG)</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
