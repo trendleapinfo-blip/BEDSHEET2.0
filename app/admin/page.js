@@ -44,7 +44,9 @@ import {
   Link2,
   ExternalLink,
   Eye,
-  Globe
+  Globe,
+  Send,
+  Loader2
 } from "lucide-react";
 
 const formatDate = (dateVal) => {
@@ -130,6 +132,7 @@ export default function AdminDashboard() {
     discountPercent: 10,
     commissionRate: 10,
   });
+  const [sendingReportId, setSendingReportId] = useState(null);
 
   // Refunds data state
   const [refundsList, setRefundsList] = useState([]);
@@ -652,6 +655,28 @@ export default function AdminDashboard() {
       console.error("Record payout error:", err);
     } finally {
       setPartnerLoading(false);
+    }
+  };
+
+  const handleSendTestReport = async (partnerId, partnerName, partnerEmail) => {
+    try {
+      setSendingReportId(partnerId);
+      const res = await fetch("/api/admin/partner-links/send-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partnerId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`✅ Test digest email sent successfully to ${partnerEmail}!\n\nPartner: ${partnerName}\nCheck their inbox for the performance report.`);
+      } else {
+        alert(`❌ Failed: ${data.error || "Unknown error"}`);
+      }
+    } catch (err) {
+      console.error("Send test report error:", err);
+      alert("Error sending test report: " + err.message);
+    } finally {
+      setSendingReportId(null);
     }
   };
 
@@ -2386,6 +2411,22 @@ export default function AdminDashboard() {
                                           title={partner.status === "ACTIVE" ? "Deactivate Link" : "Activate Link"}
                                         >
                                           {partner.status === "ACTIVE" ? "Deactivate" : "Activate"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSendTestReport(partner._id, partner.name, partner.email)}
+                                          disabled={sendingReportId === partner._id}
+                                          className={`text-2xs font-black uppercase px-2.5 py-1.5 border transition-colors cursor-pointer flex items-center gap-1 ${
+                                            sendingReportId === partner._id
+                                              ? "bg-amber-100 border-amber-300 text-amber-700 cursor-wait"
+                                              : "border-amber-400 bg-amber-50 hover:bg-amber-100 text-amber-900"
+                                          }`}
+                                          title="Send Test Digest Email to Partner"
+                                        >
+                                          {sendingReportId === partner._id
+                                            ? <><Loader2 className="h-3 w-3 animate-spin" /> Sending...</>
+                                            : <><Send className="h-3 w-3" /> Test Mail</>
+                                          }
                                         </button>
                                         <button
                                           type="button"
