@@ -133,6 +133,18 @@ export default function AdminDashboard() {
     commissionRate: 10,
   });
   const [sendingReportId, setSendingReportId] = useState(null);
+  const [editPartnerModal, setEditPartnerModal] = useState(null);
+  const [editPartnerForm, setEditPartnerForm] = useState({
+    id: "",
+    name: "",
+    email: "",
+    phone: "",
+    code: "",
+    targetUrl: "/",
+    notes: "",
+    discountPercent: 10,
+    commissionRate: 10,
+  });
 
   // Refunds data state
   const [refundsList, setRefundsList] = useState([]);
@@ -677,6 +689,53 @@ export default function AdminDashboard() {
       alert("Error sending test report: " + err.message);
     } finally {
       setSendingReportId(null);
+    }
+  };
+
+  const handleOpenEditPartner = (partner) => {
+    setEditPartnerModal(partner);
+    setEditPartnerForm({
+      id: partner._id,
+      name: partner.name || "",
+      email: partner.email || "",
+      phone: partner.phone || "",
+      code: partner.code || "",
+      targetUrl: partner.targetUrl || "/",
+      notes: partner.notes || "",
+      discountPercent: partner.discountPercent !== undefined ? partner.discountPercent : 10,
+      commissionRate: partner.commissionRate !== undefined ? partner.commissionRate : 10,
+    });
+  };
+
+  const handleUpdatePartnerLink = async (e) => {
+    e.preventDefault();
+    if (!editPartnerForm.name || !editPartnerForm.email) {
+      alert("Please provide both PG/Partner Name and Email.");
+      return;
+    }
+
+    try {
+      setPartnerLoading(true);
+      const res = await fetch("/api/admin/partner-links", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editPartnerForm),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to update partner");
+        return;
+      }
+
+      alert("Partner details updated successfully!");
+      setEditPartnerModal(null);
+      fetchPartnerLinks();
+    } catch (err) {
+      console.error("Update partner error:", err);
+      alert("Error updating partner: " + err.message);
+    } finally {
+      setPartnerLoading(false);
     }
   };
 
@@ -2406,6 +2465,15 @@ export default function AdminDashboard() {
                                       <div className="flex items-center justify-end gap-1.5">
                                         <button
                                           type="button"
+                                          onClick={() => handleOpenEditPartner(partner)}
+                                          className="text-2xs font-black uppercase px-2.5 py-1.5 border border-slate-300 hover:bg-slate-200 text-slate-800 transition-colors cursor-pointer flex items-center gap-1"
+                                          title="Edit Partner Details"
+                                        >
+                                          <Edit className="h-3 w-3 text-blue-600" />
+                                          <span>Edit</span>
+                                        </button>
+                                        <button
+                                          type="button"
                                           onClick={() => handleTogglePartnerStatus(partner._id, partner.status)}
                                           className="text-2xs font-black uppercase px-2.5 py-1.5 border border-slate-300 hover:bg-slate-200 text-slate-800 transition-colors cursor-pointer"
                                           title={partner.status === "ACTIVE" ? "Deactivate Link" : "Activate Link"}
@@ -2849,6 +2917,161 @@ export default function AdminDashboard() {
                           className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md"
                         >
                           {partnerLoading ? "Creating..." : "Generate Link"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+
+              {/* MODAL: EDIT PARTNER REFERRAL LINK */}
+              {editPartnerModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fadeIn">
+                  <div className="bg-white border-2 border-slate-400 w-full max-w-lg p-6 sm:p-7 max-h-[90vh] overflow-y-auto shadow-2xl">
+                    <div className="flex items-center justify-between pb-4 border-b-2 border-slate-100">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Edit Partner / PG Details</h3>
+                        <p className="text-xs text-slate-600 font-bold uppercase tracking-wider mt-0.5">
+                          Modify partner contact, code, discount & commission
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditPartnerModal(null)}
+                        className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUpdatePartnerLink} className="space-y-4 mt-5">
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          PG / Partner Name <span className="text-rose-600">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={editPartnerForm.name}
+                          onChange={(e) => setEditPartnerForm({ ...editPartnerForm, name: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Email Address <span className="text-rose-600">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={editPartnerForm.email}
+                          onChange={(e) => setEditPartnerForm({ ...editPartnerForm, email: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                            Phone (Optional)
+                          </label>
+                          <input
+                            type="tel"
+                            placeholder="e.g. 9876543210"
+                            value={editPartnerForm.phone}
+                            onChange={(e) => setEditPartnerForm({ ...editPartnerForm, phone: e.target.value })}
+                            className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                            Referral Code
+                          </label>
+                          <input
+                            type="text"
+                            value={editPartnerForm.code}
+                            onChange={(e) => setEditPartnerForm({ ...editPartnerForm, code: e.target.value.toUpperCase() })}
+                            className="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-mono font-bold text-slate-900 uppercase focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3 border-2 border-slate-200">
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1">
+                            Customer Discount % <span className="text-emerald-700 font-bold">(Off on Order)</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={editPartnerForm.discountPercent}
+                            onChange={(e) => setEditPartnerForm({ ...editPartnerForm, discountPercent: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:outline-hidden"
+                          />
+                          <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">Discount given to customer</span>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1">
+                            PG Owner Commission % <span className="text-amber-700 font-bold">(Payout)</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={editPartnerForm.commissionRate}
+                            onChange={(e) => setEditPartnerForm({ ...editPartnerForm, commissionRate: e.target.value })}
+                            className="w-full px-3 py-2 bg-white border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:outline-hidden"
+                          />
+                          <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">Commission earned by PG</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Target Landing Page
+                        </label>
+                        <select
+                          value={editPartnerForm.targetUrl}
+                          onChange={(e) => setEditPartnerForm({ ...editPartnerForm, targetUrl: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        >
+                          <option value="/">Homepage (/)</option>
+                          <option value="/shop">Shop / Plans (/shop)</option>
+                          <option value="/signup">Direct Signup (/signup)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-slate-800 mb-1.5">
+                          Internal Notes
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="e.g. Special partner terms or notes"
+                          value={editPartnerForm.notes}
+                          onChange={(e) => setEditPartnerForm({ ...editPartnerForm, notes: e.target.value })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border-2 border-slate-300 text-xs font-bold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-hidden"
+                        />
+                      </div>
+
+                      <div className="flex gap-3 pt-4 border-t-2 border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setEditPartnerModal(null)}
+                          className="flex-1 py-3 border-2 border-slate-300 text-xs font-black uppercase tracking-wider text-slate-800 hover:bg-slate-100 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={partnerLoading}
+                          className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md"
+                        >
+                          {partnerLoading ? "Saving..." : "Save Changes"}
                         </button>
                       </div>
                     </form>

@@ -180,7 +180,7 @@ export async function PATCH(request) {
 
     await dbConnect();
     const body = await request.json();
-    const { id, action, status, name, email, phone, notes, commissionRate, discountPercent, payoutAmount, reference } = body;
+    const { id, action, status, name, email, phone, code, targetUrl, notes, commissionRate, discountPercent, payoutAmount, reference } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Link ID is required" }, { status: 400 });
@@ -219,11 +219,30 @@ export async function PATCH(request) {
     const updateFields = {};
     if (status) updateFields.status = status;
     if (name) updateFields.name = name.trim();
-    if (email) updateFields.email = email.trim().toLowerCase();
+    if (email) {
+      const emailTrim = email.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailTrim)) {
+        return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
+      }
+      updateFields.email = emailTrim;
+    }
     if (phone !== undefined) updateFields.phone = phone.trim();
+    if (targetUrl !== undefined) updateFields.targetUrl = targetUrl.trim();
     if (notes !== undefined) updateFields.notes = notes.trim();
-    if (commissionRate !== undefined) updateFields.commissionRate = Number(commissionRate);
-    if (discountPercent !== undefined) updateFields.discountPercent = Number(discountPercent);
+    if (commissionRate !== undefined && commissionRate !== "") updateFields.commissionRate = Number(commissionRate);
+    if (discountPercent !== undefined && discountPercent !== "") updateFields.discountPercent = Number(discountPercent);
+
+    if (code) {
+      const cleanCode = code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
+      if (cleanCode) {
+        const existing = await PartnerLink.findOne({ code: cleanCode, _id: { $ne: id } });
+        if (existing) {
+          return NextResponse.json({ error: `Referral code '${cleanCode}' is already in use by another partner.` }, { status: 400 });
+        }
+        updateFields.code = cleanCode;
+      }
+    }
 
     const updated = await PartnerLink.findByIdAndUpdate(id, updateFields, { new: true });
     if (!updated) {
