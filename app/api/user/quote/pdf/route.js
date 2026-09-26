@@ -106,7 +106,7 @@ function buildInvoicePDF({
   streams.push(rect(0, Y - 10, W, 58, 0.10, 0.12, 0.16));
   streams.push(text(ML, Y + 20, "ClosetRush", "/F2", 22, 1, 1, 1));
   streams.push(text(ML + 158, Y + 20, "Bedding Rentals", "/F1", 10, 0.60, 0.75, 0.72));
-  streams.push(text(ML, Y + 5, "Gurugram, Haryana, India  |  support@closetrush.in  |  www.closetrush.in", "/F1", 7.5, 0.55, 0.70, 0.68));
+  streams.push(text(ML, Y + 5, "Gurugram, Haryana, India  |  contact@closetrush.in  |  www.closetrush.in", "/F1", 7.5, 0.55, 0.70, 0.68));
   // Title badge on right
   streams.push(rect(W - MR - 170, Y + 2, 170, 28, 0.05, 0.50, 0.44));
   streams.push(text(W - MR - 162, Y + 10, docTitle, "/F2", 11, 1, 1, 1));
@@ -176,7 +176,7 @@ function buildInvoicePDF({
   let FY = Y - 12;
   streams.push(text(FX + 8, FY, "ClosetRush Bedding Rentals", "/F2", 10, 0.10, 0.12, 0.16));
   FY -= 14;
-  streams.push(text(FX + 8, FY, "support@closetrush.in", "/F1", 8.5, 0.30, 0.32, 0.36));
+  streams.push(text(FX + 8, FY, "contact@closetrush.in", "/F1", 8.5, 0.30, 0.32, 0.36));
   FY -= 13;
   streams.push(text(FX + 8, FY, "www.closetrush.in", "/F1", 8.5, 0.30, 0.32, 0.36));
   FY -= 13;
@@ -305,7 +305,7 @@ function buildInvoicePDF({
   const terms = [
     "1. Security deposit is 100% refundable on return of bedding in good condition.",
     "2. Swaps are done as per your plan cycle. Please retain this invoice for your records.",
-    "3. For queries: support@closetrush.in | Gurugram, Haryana, India - 122003",
+    "3. For queries: contact@closetrush.in | Gurugram, Haryana, India - 122003",
   ];
   terms.forEach(t => {
     streams.push(text(ML, Y, t, "/F1", 7.5, 0.44, 0.46, 0.50));
@@ -317,7 +317,7 @@ function buildInvoicePDF({
   streams.push(rect(0, 51, W, 3, 0.05, 0.50, 0.44)); // teal top line
   streams.push(rect(W - 5, 0, 5, 52, 0.05, 0.50, 0.44)); // teal right accent
   streams.push(text(ML, 34, "ClosetRush Bedding Rentals", "/F2", 9, 1, 1, 1));
-  streams.push(text(ML, 22, "support@closetrush.in  |  www.closetrush.in  |  Sector 44, Gurugram, Haryana - 122003", "/F1", 7.5, 0.60, 0.70, 0.70));
+  streams.push(text(ML, 22, "contact@closetrush.in  |  www.closetrush.in  |  Sector 44, Gurugram, Haryana - 122003", "/F1", 7.5, 0.60, 0.70, 0.70));
   streams.push(text(ML, 11, "UV-C Sterilized Linens  |  GST Registered  |  Computer-generated invoice — no physical signature required.", "/F1", 6.5, 0.48, 0.55, 0.55));
   streams.push(textR(W - ML, 34, "Page 1 of 1", "/F1", 7, 0.55, 0.65, 0.65));
 
